@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  admin
+  caja
+  supervisor
+}
+
+enum TipoConsumo {
+  cliente
+  chica
+}
+
+enum MedioPago {
+  efectivo
+  transferencia
+  debito
+  credito
+}
+
+enum TipoCategoria {
+  trago
+  botella
+}
+
+enum EstadoComanda {
+  activa
+  anulada
+}
+
+model ConfigGeneral {
+  id          Int     @id @default(autoincrement())
+  clave       String  @unique
+  valor       String
+  descripcion String?
+}
+
+model Categoria {
+  id            Int            @id @default(autoincrement())
+  nombre        String
+  tipo          TipoCategoria  @default(trago)
+  precioCliente Int?           // Para tragos
+  precioChica   Int?           // Para tragos
+  comisionChica Int?           // Para tragos
+  precio        Int?           // Para botellas
+  activa        Boolean        @default(true)
+  comandas      Comanda[]
+}
+
+model Usuario {
+  id           Int       @id @default(autoincrement())
+  nombre       String
+  email        String    @unique
+  passwordHash String
+  rol          Rol
+  activo       Boolean   @default(true)
+  ultimoLogin  DateTime?
+  comandas     Comanda[]
+}
+
+model Chica {
+  id           Int       @id @default(autoincrement())
+  nombre       String
+  activa       Boolean   @default(true)
+  fechaIngreso DateTime  @default(now())
+  comandas1    Comanda[] @relation("Chica1")
+  comandas2    Comanda[] @relation("Chica2")
+}
+
+model Comanda {
+  id                  Int             @id @default(autoincrement())
+  fecha               DateTime        @default(now())
+  hora                String
+  categoriaId         Int
+  categoria           Categoria       @relation(fields: [categoriaId], references: [id])
+  tipoConsumo         TipoConsumo
+  chica1Id            Int?
+  chica1              Chica?          @relation("Chica1", fields: [chica1Id], references: [id])
+  chica2Id            Int?
+  chica2              Chica?          @relation("Chica2", fields: [chica2Id], references: [id])
+  precioBase          Int
+  precioFinal         Int
+  comisionTotal       Int
+  comisionChica1      Int?
+  comisionChica2      Int?
+  descuentoPorcentaje Float?
+  descuentoMonto      Int?
+  cortesia            Boolean         @default(false)
+  medioPago           MedioPago
+  estado              EstadoComanda   @default(activa)
+  usuarioId           Int
+  usuario             Usuario         @relation(fields: [usuarioId], references: [id])
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model CajaTurno {
+  id                Int      @id @default(autoincrement())
+  fecha             DateTime
+  turno             String
+  totalEfectivo     Int
+  totalTransferencia Int
+  totalDebito       Int
+  totalCredito      Int
+  totalGeneral      Int
+  responsable       String
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  usuarioId  Int?
+  accion     String
+  tabla      String
+  registroId Int?
+  fecha      DateTime @default(now())
+  detalles   String?
+}

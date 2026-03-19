@@ -1,9 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Button from '../../../components/atoms/Button'
+import Input from '../../../components/atoms/Input'
+import LoadingState from '../../../components/atoms/LoadingState'
+import StatusBadge from '../../../components/atoms/StatusBadge'
 import DashboardLayout from '../../../components/DashboardLayout'
+import DataTable, { type DataTableColumn } from '../../../components/molecules/DataTable'
+import FormField from '../../../components/molecules/FormField'
+import PageHeader from '../../../components/molecules/PageHeader'
 import Modal from '../../../components/Modal'
-import FormError from '../../../components/FormError'
+import { getAuthHeaders, getStoredUser } from '../../../lib/client-auth'
 
 interface Chica {
   id: number
@@ -15,6 +22,13 @@ interface FormData {
   nombre: string
 }
 
+interface AuthUser {
+  id: number
+  nombre: string
+  email: string
+  rol: string
+}
+
 export default function Chicas() {
   const [chicas, setChicas] = useState<Chica[]>([])
   const [loading, setLoading] = useState(true)
@@ -22,22 +36,23 @@ export default function Chicas() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const [formData, setFormData] = useState<FormData>({
     nombre: '',
   })
 
   useEffect(() => {
+    setCurrentUser(getStoredUser<AuthUser>())
     fetchChicas()
   }, [])
 
   const fetchChicas = async () => {
     try {
       setLoading(true)
-      const token = localStorage.getItem('token')
-      if (!token) return
 
       const response = await fetch('/api/chicas', {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: getAuthHeaders(),
       })
       const data = await response.json()
       setChicas(Array.isArray(data) ? data : [])
@@ -82,13 +97,12 @@ export default function Chicas() {
 
     try {
       setIsSubmitting(true)
-      const token = localStorage.getItem('token')
       
       const response = await fetch('/api/chicas', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           nombre: formData.nombre,
@@ -100,13 +114,8 @@ export default function Chicas() {
         throw new Error(errData.error || 'Error al crear la chica')
       }
 
-      // Recargar chicas
       await fetchChicas()
-      
-      // Limpiar formulario y cerrar modal
-      setFormData({
-        nombre: '',
-      })
+      setFormData({ nombre: '' })
       setShowModal(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear la chica')
@@ -116,52 +125,80 @@ export default function Chicas() {
     }
   }
 
-  if (loading) return <DashboardLayout><div>Cargando...</div></DashboardLayout>
+  const handleDelete = async (chicaId: number) => {
+    if (!confirm('¿Deseas eliminar esta chica? Quedará inactiva.')) {
+      return
+    }
+
+    try {
+      setDeletingId(chicaId)
+      const response = await fetch(`/api/chicas/${chicaId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'No se pudo eliminar la chica')
+      }
+
+      await fetchChicas()
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'No se pudo eliminar la chica')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const columns: DataTableColumn<Chica>[] = [
+    { key: 'id', header: 'ID', cell: (chica) => chica.id },
+    { key: 'nombre', header: 'Nombre', cell: (chica) => chica.nombre },
+    {
+      key: 'estado',
+      header: 'Estado',
+      cell: (chica) => (
+        <StatusBadge tone={chica.activa ? 'success' : 'danger'}>
+          {chica.activa ? 'Activa' : 'Inactiva'}
+        </StatusBadge>
+      ),
+    },
+    {
+      key: 'acciones',
+      header: 'Acciones',
+      cell: (chica) => currentUser?.rol === 'admin' ? (
+        <Button
+          size="sm"
+          variant="danger"
+          disabled={deletingId === chica.id}
+          onClick={() => handleDelete(chica.id)}
+        >
+          Eliminar
+        </Button>
+      ) : (
+        <span className="text-xs text-gray-500">Solo admin</span>
+      ),
+    },
+  ]
+
+  if (loading) return <DashboardLayout><LoadingState /></DashboardLayout>
 
   return (
     <DashboardLayout>
       <div>
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Chicas</h1>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-semibold"
-          >
-            + Agregar Chica
-          </button>
-        </div>
+        <PageHeader
+          title="Chicas"
+          description="Administra el catálogo de chicas activas e inactivas."
+          actions={<Button onClick={() => setShowModal(true)}>+ Agregar Chica</Button>}
+        />
 
-        <div className="bg-gray-800 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-700">
-              <tr>
-                <th className="text-left p-3">ID</th>
-                <th className="text-left p-3">Nombre</th>
-                <th className="text-left p-3">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {chicas.map(chica => (
-                <tr key={chica.id} className="border-b border-gray-700 hover:bg-gray-750">
-                  <td className="p-3">{chica.id}</td>
-                  <td className="p-3">{chica.nombre}</td>
-                  <td className="p-3">
-                    <span className={chica.activa ? 'text-green-400' : 'text-red-400'}>
-                      {chica.activa ? '✓ Activa' : '✗ Inactiva'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {chicas.length === 0 && (
-            <div className="p-6 text-center text-gray-400">
-              No hay chicas registradas
-            </div>
-          )}
-        </div>
+        <DataTable
+          columns={columns}
+          data={chicas}
+          getRowKey={(chica) => chica.id}
+          emptyTitle="No hay chicas registradas"
+          emptyDescription="Agrega la primera chica para empezar a operar."
+        />
 
-        {/* Modal para agregar chica */}
         <Modal
           isOpen={showModal}
           onClose={() => {
@@ -178,40 +215,35 @@ export default function Chicas() {
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Nombre</label>
-              <input
+            <FormField label="Nombre" error={fieldErrors.nombre}>
+              <Input
                 type="text"
                 name="nombre"
                 value={formData.nombre}
                 onChange={handleChange}
                 placeholder="Ej: Maria, Juanita, etc"
-                className={`w-full p-2 bg-gray-700 text-white rounded ${
-                  fieldErrors.nombre ? 'border-2 border-red-500' : ''
-                }`}
+                hasError={Boolean(fieldErrors.nombre)}
               />
-              <FormError message={fieldErrors.nombre} />
-            </div>
+            </FormField>
 
             <div className="flex gap-3 justify-end pt-4">
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   setShowModal(false)
                   setFieldErrors({})
                   setError('')
                 }}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded font-semibold"
+                variant="secondary"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-semibold disabled:opacity-50"
               >
                 {isSubmitting ? 'Guardando...' : 'Agregar Chica'}
-              </button>
+              </Button>
             </div>
           </form>
         </Modal>

@@ -2,8 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Button from '../../components/atoms/Button'
+import LoadingState from '../../components/atoms/LoadingState'
+import StatusBadge from '../../components/atoms/StatusBadge'
 import DashboardLayout from '../../components/DashboardLayout'
-import { mockComandas } from '../../lib/mockData'
+import DataTable, { type DataTableColumn } from '../../components/molecules/DataTable'
+import MetricCard from '../../components/molecules/MetricCard'
+import PageHeader from '../../components/molecules/PageHeader'
+import { logout, getAuthHeaders, getStoredUser } from '../../lib/client-auth'
+import { formatCurrency, formatDate } from '../../lib/formatters'
 
 interface User {
   id: number
@@ -31,105 +38,87 @@ export default function Dashboard() {
   const router = useRouter()
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    const userData = localStorage.getItem('user')
-    if (!token || !userData) {
+    const currentUser = getStoredUser<User>()
+    if (!currentUser) {
       router.push('/login')
       return
     }
-    setUser(JSON.parse(userData))
+    setUser(currentUser)
     
-    // Cargar comandas desde la API
-    fetch('/api/comandas', {
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(data => {
-        setComandas(Array.isArray(data) ? data : [])
-        calculateStats(Array.isArray(data) ? data : [])
+    fetch('/api/stats', { headers: getAuthHeaders() })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && typeof data.totalVentas === 'number') {
+          setStats({
+            totalVentas: data.totalVentas,
+            totalComisiones: data.totalComisiones,
+            comandasHoy: data.comandasHoy,
+          })
+        }
       })
-      .catch(err => console.error('Error cargando comandas:', err))
+      .catch((err) => console.error('Error cargando stats:', err))
+
+    fetch('/api/comandas?limit=5', { headers: getAuthHeaders() })
+      .then((r) => r.json())
+      .then((data) => setComandas(Array.isArray(data) ? data : []))
+      .catch((err) => console.error('Error cargando comandas recientes:', err))
   }, [router])
 
-  const calculateStats = (comandasData: any[]) => {
-    const hoy = new Date().toISOString().split('T')[0]
-    const hoyComandas = comandasData.filter(c => c.fecha.startsWith(hoy) && c.estado === 'activa')
-    
-    setStats({
-      totalVentas: hoyComandas.reduce((sum, c) => sum + c.precioFinal, 0),
-      totalComisiones: hoyComandas.reduce((sum, c) => sum + c.comisionTotal, 0),
-      comandasHoy: hoyComandas.length,
-    })
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+  const handleLogout = async () => {
+    await logout()
     router.push('/login')
   }
 
-  if (!user) return <div>Cargando...</div>
+  const recentColumns: DataTableColumn<Comanda>[] = [
+    { key: 'id', header: 'ID', cell: (comanda) => comanda.id },
+    { key: 'fecha', header: 'Fecha', cell: (comanda) => formatDate(comanda.fecha) },
+    { key: 'precio', header: 'Precio', cell: (comanda) => formatCurrency(comanda.precioFinal) },
+    { key: 'comision', header: 'Comision', cell: (comanda) => formatCurrency(comanda.comisionTotal) },
+    {
+      key: 'estado',
+      header: 'Estado',
+      cell: (comanda) => (
+        <StatusBadge tone={comanda.estado === 'anulada' ? 'danger' : comanda.estado === 'pagada' ? 'neutral' : 'success'}>
+          {comanda.estado}
+        </StatusBadge>
+      ),
+    },
+  ]
+
+  if (!user) {
+    return (
+      <DashboardLayout>
+        <LoadingState message="Cargando dashboard..." />
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <div className="flex items-center gap-4">
-          <span>{user.nombre} ({user.rol})</span>
-          <button onClick={handleLogout} className="bg-red-600 px-4 py-2 rounded hover:bg-red-700">
-            Salir
-          </button>
-        </div>
+      <PageHeader
+        title="Dashboard"
+        description={`Bienvenido ${user.nombre}. Resumen operativo del turno actual.`}
+        actions={
+          <>
+            <span className="text-sm text-gray-300">{user.nombre} ({user.rol})</span>
+            <Button variant="danger" onClick={handleLogout}>Salir</Button>
+          </>
+        }
+      />
+
+      <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <MetricCard label="Ventas Hoy" value={formatCurrency(stats.totalVentas)} accent="green" />
+        <MetricCard label="Comisiones Hoy" value={formatCurrency(stats.totalComisiones)} accent="blue" />
+        <MetricCard label="Comandas Hoy" value={stats.comandasHoy} accent="purple" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-gray-800 p-6 rounded-lg">
-          <h3 className="text-lg font-semibold mb-2">Ventas Hoy</h3>
-          <p className="text-3xl font-bold text-green-400">${stats.totalVentas.toLocaleString()}</p>
-        </div>
-        <div className="bg-gray-800 p-6 rounded-lg">
-          <h3 className="text-lg font-semibold mb-2">Comisiones Hoy</h3>
-          <p className="text-3xl font-bold text-blue-400">${stats.totalComisiones.toLocaleString()}</p>
-        </div>
-        <div className="bg-gray-800 p-6 rounded-lg">
-          <h3 className="text-lg font-semibold mb-2">Comandas Hoy</h3>
-          <p className="text-3xl font-bold text-purple-400">{stats.comandasHoy}</p>
-        </div>
-      </div>
-
-      <div className="bg-gray-800 p-6 rounded-lg">
-        <h2 className="text-xl font-bold mb-4">Comandas Recientes</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <th className="text-left p-2">ID</th>
-                <th className="text-left p-2">Fecha</th>
-                <th className="text-left p-2">Precio</th>
-                <th className="text-left p-2">Comision</th>
-                <th className="text-left p-2">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {comandas.slice(0, 5).map((comanda) => (
-                <tr key={comanda.id} className="border-b border-gray-700">
-                  <td className="p-2">{comanda.id}</td>
-                  <td className="p-2">{new Date(comanda.fecha).toLocaleDateString()}</td>
-                  <td className="p-2">${comanda.precioFinal}</td>
-                  <td className="p-2">${comanda.comisionTotal}</td>
-                  <td className="p-2">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      comanda.estado === 'activa' ? 'bg-green-600' : 'bg-red-600'
-                    }`}>
-                      {comanda.estado}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        columns={recentColumns}
+        data={comandas.slice(0, 5)}
+        getRowKey={(comanda) => comanda.id}
+        emptyTitle="No hay comandas recientes"
+        emptyDescription="Cuando se registren ventas, aparecerán aquí."
+      />
     </DashboardLayout>
   )
 }

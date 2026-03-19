@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '../../../lib/prisma'
-import { getUserFromRequest } from '../../../lib/auth'
+import { prisma } from '@/lib/prisma'
+import { getUserFromRequest } from '@/lib/auth'
+
+interface CategoryStats {
+  cantidad: number
+  total: number
+  comision: number
+}
+
+interface ChicaStats {
+  cantidad: number
+  comision: number
+  ventas: number
+}
 
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request)
@@ -18,7 +30,7 @@ export async function GET(request: NextRequest) {
           gte: new Date(`${hoy}T00:00:00Z`),
           lt: new Date(`${hoy}T23:59:59Z`),
         },
-        estado: 'activa',
+        estado: { not: 'anulada' },
       },
       include: { categoria: true, chica1: true, chica2: true },
     })
@@ -38,7 +50,7 @@ export async function GET(request: NextRequest) {
       .reduce((sum, c) => sum + c.precioFinal, 0)
 
     // Por categoría
-    const porCategoria: Record<string, any> = {}
+    const porCategoria: Record<string, CategoryStats> = {}
     comandasHoy.forEach(cmd => {
       if (!porCategoria[cmd.categoria.nombre]) {
         porCategoria[cmd.categoria.nombre] = { cantidad: 0, total: 0, comision: 0 }
@@ -49,7 +61,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Por chica
-    const porChica: Record<string, any> = {}
+    const porChica: Record<string, ChicaStats> = {}
     comandasHoy.forEach(cmd => {
       if (cmd.chica1) {
         if (!porChica[cmd.chica1.nombre]) {
@@ -110,7 +122,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error fetching reportes:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
-    return NextResponse.json({ error: `Error al obtener reportes: ${errorMessage}` }, { status: 500 })
+    return NextResponse.json({ error: 'Error al obtener reportes' }, { status: 500 })
   }
 }

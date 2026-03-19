@@ -1,9 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Button from '../../../components/atoms/Button'
+import Input from '../../../components/atoms/Input'
+import LoadingState from '../../../components/atoms/LoadingState'
+import Select from '../../../components/atoms/Select'
+import StatusBadge from '../../../components/atoms/StatusBadge'
 import DashboardLayout from '../../../components/DashboardLayout'
+import DataTable, { type DataTableColumn } from '../../../components/molecules/DataTable'
+import FormField from '../../../components/molecules/FormField'
+import PageHeader from '../../../components/molecules/PageHeader'
 import Modal from '../../../components/Modal'
-import FormError from '../../../components/FormError'
+import { getAuthHeaders, getStoredUser } from '../../../lib/client-auth'
+import { formatCurrency } from '../../../lib/formatters'
 
 interface Categoria {
   id: number
@@ -17,6 +26,13 @@ interface Categoria {
 }
 
 type TipoCategoria = 'trago' | 'botella'
+
+interface AuthUser {
+  id: number
+  nombre: string
+  email: string
+  rol: string
+}
 
 interface FormData {
   nombre: string
@@ -34,6 +50,8 @@ export default function Categorias() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
+  const [actionId, setActionId] = useState<number | null>(null)
   const [formData, setFormData] = useState<FormData>({
     nombre: '',
     tipo: 'trago',
@@ -44,17 +62,16 @@ export default function Categorias() {
   })
 
   useEffect(() => {
+    setCurrentUser(getStoredUser<AuthUser>())
     fetchCategorias()
   }, [])
 
   const fetchCategorias = async () => {
     try {
       setLoading(true)
-      const token = localStorage.getItem('token')
-      if (!token) return
 
       const response = await fetch('/api/categorias', {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: getAuthHeaders(),
       })
       const data = await response.json()
       setCategorias(Array.isArray(data) ? data : [])
@@ -130,7 +147,6 @@ export default function Categorias() {
 
     try {
       setIsSubmitting(true)
-      const token = localStorage.getItem('token')
       
       const payload: any = {
         nombre: formData.nombre,
@@ -149,7 +165,7 @@ export default function Categorias() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(payload),
       })
@@ -159,10 +175,7 @@ export default function Categorias() {
         throw new Error(errData.error || 'Error al crear la categoria')
       }
 
-      // Recargar categorias
       await fetchCategorias()
-      
-      // Limpiar formulario y cerrar modal
       setFormData({
         nombre: '',
         tipo: 'trago',
@@ -181,105 +194,141 @@ export default function Categorias() {
   }
 
 
+  const handleToggleActiva = async (categoria: Categoria) => {
+    const accion = categoria.activa ? 'desactivar' : 'activar'
+    if (!confirm(`¿Deseas ${accion} la categoría "${categoria.nombre}"?`)) return
+
+    try {
+      setActionId(categoria.id)
+      const response = await fetch(`/api/categorias/${categoria.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ activa: !categoria.activa }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || `No se pudo ${accion} la categoría`)
+      }
+
+      await fetchCategorias()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Error al ${accion} la categoría`)
+    } finally {
+      setActionId(null)
+    }
+  }
+
+  const handleDelete = async (categoria: Categoria) => {
+    if (!confirm(`¿Eliminar permanentemente "${categoria.nombre}"? Esta acción no se puede deshacer.`)) return
+
+    try {
+      setActionId(categoria.id)
+      const response = await fetch(`/api/categorias/${categoria.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'No se pudo eliminar la categoría')
+      }
+
+      await fetchCategorias()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al eliminar la categoría')
+    } finally {
+      setActionId(null)
+    }
+  }
+
+  const accionesCell = (categoria: Categoria) => (
+    <div className="flex gap-2">
+      {['admin', 'supervisor'].includes(currentUser?.rol ?? '') && (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={actionId === categoria.id}
+          onClick={() => handleToggleActiva(categoria)}
+        >
+          {categoria.activa ? 'Desactivar' : 'Activar'}
+        </Button>
+      )}
+      {currentUser?.rol === 'admin' && (
+        <Button
+          size="sm"
+          variant="danger"
+          disabled={actionId === categoria.id}
+          onClick={() => handleDelete(categoria)}
+        >
+          Eliminar
+        </Button>
+      )}
+    </div>
+  )
+
   const tragos = categorias.filter(c => c.tipo === 'trago')
   const botellas = categorias.filter(c => c.tipo === 'botella')
+
+  const statusCell = (categoria: Categoria) => (
+    <StatusBadge tone={categoria.activa ? 'success' : 'danger'}>
+      {categoria.activa ? 'Activa' : 'Inactiva'}
+    </StatusBadge>
+  )
+
+  const tragosColumns: DataTableColumn<Categoria>[] = [
+    { key: 'id', header: 'ID', cell: (categoria) => categoria.id },
+    { key: 'nombre', header: 'Nombre', cell: (categoria) => categoria.nombre },
+    { key: 'precioCliente', header: 'Precio Cliente', cell: (categoria) => formatCurrency(categoria.precioCliente ?? 0) },
+    { key: 'precioChica', header: 'Precio Chica', cell: (categoria) => formatCurrency(categoria.precioChica ?? 0) },
+    { key: 'comision', header: 'Comision Chica', cell: (categoria) => formatCurrency(categoria.comisionChica ?? 0) },
+    { key: 'estado', header: 'Estado', cell: statusCell },
+    { key: 'acciones', header: 'Acciones', cell: accionesCell },
+  ]
+
+  const botellasColumns: DataTableColumn<Categoria>[] = [
+    { key: 'id', header: 'ID', cell: (categoria) => categoria.id },
+    { key: 'nombre', header: 'Nombre', cell: (categoria) => categoria.nombre },
+    { key: 'precio', header: 'Precio', cell: (categoria) => formatCurrency(categoria.precio ?? 0) },
+    { key: 'estado', header: 'Estado', cell: statusCell },
+    { key: 'acciones', header: 'Acciones', cell: accionesCell },
+  ]
 
   return (
     <DashboardLayout>
       <div>
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Categorias</h1>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-semibold"
-          >
-            + Agregar Categoria
-          </button>
-        </div>
+        <PageHeader
+          title="Categorias"
+          description="Agrupa tragos y botellas con precios y comisiones consistentes."
+          actions={<Button onClick={() => setShowModal(true)}>+ Agregar Categoria</Button>}
+        />
 
         {loading ? (
-          <div className="text-center text-gray-400">Cargando...</div>
+          <LoadingState />
         ) : (
           <div className="space-y-8">
-            {/* TRAGOS */}
             <div>
               <h2 className="text-xl font-semibold mb-4 text-purple-400">🍹 Tragos</h2>
-              <div className="bg-gray-800 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-700">
-                    <tr>
-                      <th className="text-left p-3">ID</th>
-                      <th className="text-left p-3">Nombre</th>
-                      <th className="text-left p-3">Precio Cliente</th>
-                      <th className="text-left p-3">Precio Chica</th>
-                      <th className="text-left p-3">Comision Chica</th>
-                      <th className="text-left p-3">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tragos.map(cat => (
-                      <tr key={cat.id} className="border-b border-gray-700 hover:bg-gray-750">
-                        <td className="p-3">{cat.id}</td>
-                        <td className="p-3">{cat.nombre}</td>
-                        <td className="p-3">${cat.precioCliente?.toLocaleString()}</td>
-                        <td className="p-3">${cat.precioChica?.toLocaleString()}</td>
-                        <td className="p-3">${cat.comisionChica?.toLocaleString()}</td>
-                        <td className="p-3">
-                          <span className={cat.activa ? 'text-green-400' : 'text-red-400'}>
-                            {cat.activa ? '✓ Activa' : '✗ Inactiva'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {tragos.length === 0 && (
-                  <div className="p-6 text-center text-gray-400">
-                    No hay tragos registrados
-                  </div>
-                )}
-              </div>
+              <DataTable
+                columns={tragosColumns}
+                data={tragos}
+                getRowKey={(categoria) => categoria.id}
+                emptyTitle="No hay tragos registrados"
+              />
             </div>
 
-            {/* BOTELLAS */}
             <div>
               <h2 className="text-xl font-semibold mb-4 text-blue-400">🍾 Botellas</h2>
-              <div className="bg-gray-800 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-700">
-                    <tr>
-                      <th className="text-left p-3">ID</th>
-                      <th className="text-left p-3">Nombre</th>
-                      <th className="text-left p-3">Precio</th>
-                      <th className="text-left p-3">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {botellas.map(cat => (
-                      <tr key={cat.id} className="border-b border-gray-700 hover:bg-gray-750">
-                        <td className="p-3">{cat.id}</td>
-                        <td className="p-3">{cat.nombre}</td>
-                        <td className="p-3">${cat.precio?.toLocaleString()}</td>
-                        <td className="p-3">
-                          <span className={cat.activa ? 'text-green-400' : 'text-red-400'}>
-                            {cat.activa ? '✓ Activa' : '✗ Inactiva'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {botellas.length === 0 && (
-                  <div className="p-6 text-center text-gray-400">
-                    No hay botellas registradas
-                  </div>
-                )}
-              </div>
+              <DataTable
+                columns={botellasColumns}
+                data={botellas}
+                getRowKey={(categoria) => categoria.id}
+                emptyTitle="No hay botellas registradas"
+              />
             </div>
           </div>
         )}
 
-        {/* Modal para agregar categoria */}
         <Modal
           isOpen={showModal}
           onClose={() => {
@@ -296,121 +345,96 @@ export default function Categorias() {
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Tipo de Categoria</label>
-              <select
+            <FormField label="Tipo de Categoria">
+              <Select
                 name="tipo"
                 value={formData.tipo}
                 onChange={handleChange}
-                className="w-full p-2 bg-gray-700 text-white rounded"
               >
                 <option value="trago">🍹 Trago</option>
                 <option value="botella">🍾 Botella</option>
-              </select>
-            </div>
+              </Select>
+            </FormField>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Nombre de Categoria</label>
-              <input
+            <FormField label="Nombre de Categoria" error={fieldErrors.nombre}>
+              <Input
                 type="text"
                 name="nombre"
                 value={formData.nombre}
                 onChange={handleChange}
                 placeholder="Ej: Cerveza, Whisky, Champagne"
-                className={`w-full p-2 bg-gray-700 text-white rounded ${
-                  fieldErrors.nombre ? 'border-2 border-red-500' : ''
-                }`}
+                hasError={Boolean(fieldErrors.nombre)}
               />
-              <FormError message={fieldErrors.nombre} />
-            </div>
+            </FormField>
 
-            {/* Campos para TRAGO */}
             {formData.tipo === 'trago' && (
               <>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Precio Cliente</label>
-                  <input
+                <FormField label="Precio Cliente" error={fieldErrors.precioCliente}>
+                  <Input
                     type="number"
                     name="precioCliente"
                     value={formData.precioCliente}
                     onChange={handleChange}
                     placeholder="0"
-                    className={`w-full p-2 bg-gray-700 text-white rounded ${
-                      fieldErrors.precioCliente ? 'border-2 border-red-500' : ''
-                    }`}
+                    hasError={Boolean(fieldErrors.precioCliente)}
                   />
-                  <FormError message={fieldErrors.precioCliente} />
-                </div>
+                </FormField>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">Precio Chica</label>
-                  <input
+                <FormField label="Precio Chica" error={fieldErrors.precioChica}>
+                  <Input
                     type="number"
                     name="precioChica"
                     value={formData.precioChica}
                     onChange={handleChange}
                     placeholder="0"
-                    className={`w-full p-2 bg-gray-700 text-white rounded ${
-                      fieldErrors.precioChica ? 'border-2 border-red-500' : ''
-                    }`}
+                    hasError={Boolean(fieldErrors.precioChica)}
                   />
-                  <FormError message={fieldErrors.precioChica} />
-                </div>
+                </FormField>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">Comision Chica</label>
-                  <input
+                <FormField label="Comision Chica" error={fieldErrors.comisionChica}>
+                  <Input
                     type="number"
                     name="comisionChica"
                     value={formData.comisionChica}
                     onChange={handleChange}
                     placeholder="0"
-                    className={`w-full p-2 bg-gray-700 text-white rounded ${
-                      fieldErrors.comisionChica ? 'border-2 border-red-500' : ''
-                    }`}
+                    hasError={Boolean(fieldErrors.comisionChica)}
                   />
-                  <FormError message={fieldErrors.comisionChica} />
-                </div>
+                </FormField>
               </>
             )}
 
-            {/* Campos para BOTELLA */}
             {formData.tipo === 'botella' && (
-              <div>
-                <label className="block text-sm font-medium mb-2">Precio Botella</label>
-                <input
+              <FormField label="Precio Botella" error={fieldErrors.precio}>
+                <Input
                   type="number"
                   name="precio"
                   value={formData.precio}
                   onChange={handleChange}
                   placeholder="0"
-                  className={`w-full p-2 bg-gray-700 text-white rounded ${
-                    fieldErrors.precio ? 'border-2 border-red-500' : ''
-                  }`}
+                  hasError={Boolean(fieldErrors.precio)}
                 />
-                <FormError message={fieldErrors.precio} />
-              </div>
+              </FormField>
             )}
 
             <div className="flex gap-3 justify-end pt-4">
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   setShowModal(false)
                   setFieldErrors({})
                   setError('')
                 }}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded font-semibold"
+                variant="secondary"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-semibold disabled:opacity-50"
               >
                 {isSubmitting ? 'Guardando...' : 'Agregar Categoria'}
-              </button>
+              </Button>
             </div>
           </form>
         </Modal>

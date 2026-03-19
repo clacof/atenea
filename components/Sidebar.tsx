@@ -18,18 +18,21 @@ export default function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <div className="bg-gray-800 w-64 min-h-screen p-4">
-      <div className="text-white text-xl font-bold mb-8">Atenea</div>
+    <div className="min-h-screen w-64 border-r border-white/5 bg-slate-950/80 p-4 backdrop-blur">
+      <div className="mb-8 rounded-2xl border border-purple-500/20 bg-purple-500/10 px-4 py-3 text-white">
+        <div className="text-xs uppercase tracking-[0.3em] text-purple-200">Sistema</div>
+        <div className="mt-1 text-xl font-bold">Atenea</div>
+      </div>
       <nav>
         <ul className="space-y-2">
           {menuItems.map((item) => (
             <li key={item.href}>
               <Link
                 href={item.href}
-                className={`flex items-center p-3 rounded-lg transition-colors ${
+                className={`flex items-center rounded-xl p-3 transition-colors ${
                   pathname === item.href
-                    ? 'bg-purple-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-700'
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/20'
+                    : 'text-gray-300 hover:bg-white/5'
                 }`}
               >
                 <span className="mr-3">{item.icon}</span>

@@ -1,17 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { FormValidator } from '../../lib/validations'
 import FormError from '../../components/FormError'
+import {
+  setSessionExpiry,
+  getRememberedEmail,
+  setRememberedEmail,
+  clearRememberedEmail,
+} from '../../lib/client-auth'
 
 export default function Login() {
-  const [email, setEmail] = useState('admin@atenea.com')
-  const [password, setPassword] = useState('admin123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    const saved = getRememberedEmail()
+    if (saved) {
+      setEmail(saved)
+      setRememberMe(true)
+    }
+  }, [])
 
   const validateForm = (): boolean => {
     const validator = new FormValidator()
@@ -52,8 +67,11 @@ export default function Login() {
       }
 
       const data = await response.json()
-      localStorage.setItem('token', data.token)
+      // Token is stored in httpOnly cookie by the server — only store non-sensitive user info
       localStorage.setItem('user', JSON.stringify(data.user))
+      setSessionExpiry(data.expiresAt)
+      if (rememberMe) setRememberedEmail(email)
+      else clearRememberedEmail()
       router.push('/dashboard')
     } catch (err) {
       setError('Error de conexión con el servidor')
@@ -66,11 +84,13 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-900">
       <div className="bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-md">
         <h1 className="text-2xl font-bold text-white text-center mb-6">Atenea Night Club</h1>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <div className="mb-4">
             <label className="block text-gray-300 mb-2">Email</label>
             <input
               type="email"
+              name="login-email"
+              autoComplete="off"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value)
@@ -88,6 +108,8 @@ export default function Login() {
             <label className="block text-gray-300 mb-2">Contraseña</label>
             <input
               type="password"
+              name="login-password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value)
@@ -101,6 +123,15 @@ export default function Login() {
             />
             <FormError message={fieldErrors.password} />
           </div>
+          <label className="flex items-center gap-2 text-sm text-gray-300 mb-4 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="accent-purple-500 w-4 h-4"
+            />
+            Recordarme
+          </label>
           {error && <p className="bg-red-900 text-red-200 p-3 rounded mb-4">{error}</p>}
           <button
             type="submit"

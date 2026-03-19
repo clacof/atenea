@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '../../../../lib/prisma'
-import { getUserFromRequest } from '../../../../lib/auth'
+import { prisma } from '@/lib/prisma'
+import { getUserFromRequest } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request)
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
           gte: new Date(`${hoy}T00:00:00Z`),
           lt: new Date(`${hoy}T23:59:59Z`),
         },
-        estado: 'activa',
+        estado: { not: 'anulada' },
       },
       include: { categoria: true },
     })

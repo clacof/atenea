@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '../../../../components/DashboardLayout'
 import FormError from '../../../../components/FormError'
 import { DomainValidator } from '../../../../lib/validations'
+import { getAuthHeaders } from '../../../../lib/client-auth'
 
 interface Categoria {
   id: number
@@ -28,6 +29,7 @@ export default function NuevaComanda() {
   const [formData, setFormData] = useState({
     categoriaId: '',
     tipoConsumo: 'cliente',
+    clienteNombre: '',
     chica1Id: '',
     chica2Id: '',
     descuentoPorcentaje: '',
@@ -38,12 +40,9 @@ export default function NuevaComanda() {
   const router = useRouter()
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) return
-
     // Cargar categorias
     fetch('/api/categorias', {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: getAuthHeaders(),
     })
       .then(r => r.json())
       .then(data => setCategorias(Array.isArray(data) ? data : []))
@@ -51,7 +50,7 @@ export default function NuevaComanda() {
 
     // Cargar chicas
     fetch('/api/chicas', {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: getAuthHeaders(),
     })
       .then(r => r.json())
       .then(data => setChicas(Array.isArray(data) ? data : []))
@@ -105,12 +104,6 @@ export default function NuevaComanda() {
     setError('')
     setFieldErrors({})
 
-    const token = localStorage.getItem('token')
-    if (!token) {
-      setError('No autorizado')
-      return
-    }
-
     // Validar usando DomainValidator
     const validationData = {
       categoriaId: formData.categoriaId ? Number(formData.categoriaId) : null,
@@ -137,6 +130,7 @@ export default function NuevaComanda() {
       const payload = {
         categoriaId: Number(formData.categoriaId),
         tipoConsumo: formData.tipoConsumo,
+        clienteNombre: formData.clienteNombre.trim() || null,
         chica1Id: formData.chica1Id ? Number(formData.chica1Id) : null,
         chica2Id: formData.chica2Id ? Number(formData.chica2Id) : null,
         descuentoPorcentaje: formData.descuentoPorcentaje ? Number(formData.descuentoPorcentaje) : null,
@@ -149,7 +143,7 @@ export default function NuevaComanda() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(payload),
       })
@@ -186,6 +180,21 @@ export default function NuevaComanda() {
               {error}
             </div>
           )}
+
+          {/* Cliente */}
+          <div className="bg-gray-800 p-6 rounded-lg">
+            <label className="block text-sm font-medium mb-2">Nombre del Cliente</label>
+            <input
+              type="text"
+              name="clienteNombre"
+              value={formData.clienteNombre}
+              onChange={handleChange}
+              placeholder="Ej: Mesa 3, Juan, VIP..."
+              maxLength={100}
+              className="w-full p-2 bg-gray-700 text-white rounded placeholder-gray-500"
+            />
+            <p className="mt-1 text-xs text-gray-400">Opcional — sirve para agrupar comandas del mismo cliente</p>
+          </div>
 
           {/* Categoria */}
           <div className="bg-gray-800 p-6 rounded-lg">

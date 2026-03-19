@@ -1,7 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Button from '../../../components/atoms/Button'
+import Card from '../../../components/atoms/Card'
+import LoadingState from '../../../components/atoms/LoadingState'
 import DashboardLayout from '../../../components/DashboardLayout'
+import MetricCard from '../../../components/molecules/MetricCard'
+import PageHeader from '../../../components/molecules/PageHeader'
+import { getAuthHeaders } from '../../../lib/client-auth'
+import { formatCurrency } from '../../../lib/formatters'
 
 interface CajaTurno {
   totalEfectivo: number
@@ -17,35 +24,29 @@ export default function Caja() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) return
-
     fetch('/api/caja/turno', {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: getAuthHeaders(),
     })
-      .then(r => r.json())
-      .then(data => {
+      .then((response) => response.json())
+      .then((data) => {
         setCajaTurno(data)
         setLoading(false)
       })
-      .catch(err => {
-        console.error('Error:', err)
+      .catch((fetchError) => {
+        console.error('Error:', fetchError)
         setLoading(false)
       })
   }, [])
 
   const handleCloseTurno = async () => {
     if (!cajaTurno || confirm('¿Deseas cerrar el turno? Esta accion no se puede deshacer.')) {
-      const token = localStorage.getItem('token')
-      if (!token) return
-
       setIsClosing(true)
       try {
         const response = await fetch('/api/caja/turno', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
+            ...getAuthHeaders(),
           },
           body: JSON.stringify(cajaTurno),
         })
@@ -73,7 +74,7 @@ export default function Caja() {
     }
   }
 
-  if (loading) return <DashboardLayout><div>Cargando datos de caja...</div></DashboardLayout>
+  if (loading) return <DashboardLayout><LoadingState message="Cargando datos de caja..." /></DashboardLayout>
   if (!cajaTurno) return <DashboardLayout><div>Error cargando datos</div></DashboardLayout>
 
   const calcularPorcentaje = (monto: number, total: number) => {
@@ -91,36 +92,47 @@ export default function Caja() {
   return (
     <DashboardLayout>
       <div>
-        <h1 className="text-2xl font-bold mb-6">Control de Caja</h1>
+        <PageHeader
+          title="Control de Caja"
+          description="Monitorea el reparto por medio de pago y ejecuta el cierre del turno."
+        />
+
+        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5">
+          <MetricCard label="Efectivo" value={formatCurrency(cajaTurno.totalEfectivo)} accent="green" />
+          <MetricCard label="Transferencia" value={formatCurrency(cajaTurno.totalTransferencia)} accent="blue" />
+          <MetricCard label="Debito" value={formatCurrency(cajaTurno.totalDebito)} accent="purple" />
+          <MetricCard label="Credito" value={formatCurrency(cajaTurno.totalCredito)} accent="orange" />
+          <MetricCard label="Total General" value={formatCurrency(cajaTurno.totalGeneral)} accent="green" />
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-gray-800 p-6 rounded-lg">
+          <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Resumen de Hoy</h3>
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span>Efectivo:</span>
-                <span className="font-bold">${cajaTurno.totalEfectivo.toLocaleString()}</span>
+                <span className="font-bold">{formatCurrency(cajaTurno.totalEfectivo)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Transferencia:</span>
-                <span className="font-bold">${cajaTurno.totalTransferencia.toLocaleString()}</span>
+                <span className="font-bold">{formatCurrency(cajaTurno.totalTransferencia)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Debito:</span>
-                <span className="font-bold">${cajaTurno.totalDebito.toLocaleString()}</span>
+                <span className="font-bold">{formatCurrency(cajaTurno.totalDebito)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Credito:</span>
-                <span className="font-bold">${cajaTurno.totalCredito.toLocaleString()}</span>
+                <span className="font-bold">{formatCurrency(cajaTurno.totalCredito)}</span>
               </div>
               <div className="border-t border-gray-700 pt-3 mt-3 flex justify-between">
                 <span className="font-bold">Total:</span>
-                <span className="font-bold text-green-400">${cajaTurno.totalGeneral.toLocaleString()}</span>
+                <span className="font-bold text-green-400">{formatCurrency(cajaTurno.totalGeneral)}</span>
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-gray-800 p-6 rounded-lg">
+          <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Analisis de Pagos</h3>
             <div className="space-y-3">
               <div className="p-3 bg-gray-700 rounded">
@@ -162,19 +174,19 @@ export default function Caja() {
                 </div>
               )}
             </div>
-          </div>
+          </Card>
         </div>
 
-        <div className="bg-gray-800 p-6 rounded-lg">
+        <Card className="p-6">
           <h3 className="text-lg font-semibold mb-4">Cierre de Turno</h3>
-          <button
+          <Button
             onClick={handleCloseTurno}
             disabled={isClosing}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-green-600 hover:bg-green-700"
           >
             {isClosing ? '⏳ Procesando...' : 'Cerrar Turno'}
-          </button>
-        </div>
+          </Button>
+        </Card>
       </div>
     </DashboardLayout>
   )

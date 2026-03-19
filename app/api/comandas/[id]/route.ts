@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '../../../../lib/prisma'
-import { getUserFromRequest } from '../../../../lib/auth'
+import { prisma } from '@/lib/prisma'
+import { isPrismaNotFound } from '@/lib/prisma'
+import { getUserFromRequest } from '@/lib/auth'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -46,7 +47,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const data = await request.json()
     const { estado } = data
 
-    if (!['activa', 'anulada'].includes(estado)) {
+    if (!['activa', 'pagada', 'anulada'].includes(estado)) {
       return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
     }
 
@@ -64,7 +65,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json(comanda)
   } catch (error) {
     console.error('Error updating comanda:', error)
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+    if (isPrismaNotFound(error)) {
+      return NextResponse.json({ error: 'Comanda no encontrada' }, { status: 404 })
+    }
+    return NextResponse.json({ error: 'Error al actualizar comanda' }, { status: 500 })
   }
 }
 
@@ -76,13 +80,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const { id } = await params
-    await prisma.comanda.delete({
+    await prisma.comanda.update({
       where: { id: Number(id) },
+      data: { estado: 'anulada' },
     })
 
-    return NextResponse.json({ message: 'Comanda eliminada' })
+    return NextResponse.json({ message: 'Comanda anulada' })
   } catch (error) {
     console.error('Error deleting comanda:', error)
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+    if (isPrismaNotFound(error)) {
+      return NextResponse.json({ error: 'Comanda no encontrada' }, { status: 404 })
+    }
+    return NextResponse.json({ error: 'Error al anular comanda' }, { status: 500 })
   }
 }

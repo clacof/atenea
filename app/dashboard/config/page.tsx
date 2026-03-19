@@ -1,9 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Button from '../../../components/atoms/Button'
+import Input from '../../../components/atoms/Input'
+import LoadingState from '../../../components/atoms/LoadingState'
 import DashboardLayout from '../../../components/DashboardLayout'
+import FormField from '../../../components/molecules/FormField'
+import PageHeader from '../../../components/molecules/PageHeader'
+import ConfigSection from '../../../components/organisms/config/ConfigSection'
 import Modal from '../../../components/Modal'
-import FormError from '../../../components/FormError'
+import { getAuthHeaders } from '../../../lib/client-auth'
 import { DomainValidator } from '../../../lib/validations'
 
 interface ConfigData {
@@ -43,12 +49,9 @@ export default function Configuracion() {
   const fetchConfig = async () => {
     try {
       setLoading(true)
-      const token = localStorage.getItem('token')
       const response = await fetch('/api/config', {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: getAuthHeaders(),
       })
-      
-     // if (!response.ok) throw new Error('Error al cargar configuración')
       
       const data = await response.json()
       setConfig(data)
@@ -78,7 +81,6 @@ export default function Configuracion() {
       ...prev,
       [name]: isNaN(Number(value)) ? value : Number(value),
     }))
-    // Limpiar el error del campo cuando el usuario empieza a escribir
     if (fieldErrors[name]) {
       setFieldErrors({ ...fieldErrors, [name]: '' })
     }
@@ -89,7 +91,6 @@ export default function Configuracion() {
     setError('')
     setFieldErrors({})
 
-    // Validar usando DomainValidator
     const validation = DomainValidator.validateConfig(config)
     if (!validation.isValid) {
       const errors: Record<string, string> = {}
@@ -102,12 +103,11 @@ export default function Configuracion() {
     }
 
     try {
-      const token = localStorage.getItem('token')
       const response = await fetch('/api/config', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(config),
       })
@@ -125,113 +125,86 @@ export default function Configuracion() {
   return (
     <DashboardLayout>
       <div>
-        <h1 className="text-2xl font-bold mb-6">Configuracion General</h1>
+        <PageHeader
+          title="Configuracion General"
+          description="Centraliza reglas operativas, porcentajes y accesos administrativos."
+        />
 
         {error && <div className="bg-red-900 text-red-200 p-4 rounded mb-4">{error}</div>}
-        {loading && <div className="text-center text-gray-400">Cargando configuracion...</div>}
+        {loading && <LoadingState message="Cargando configuracion..." />}
 
         {!loading && (
-          <form onSubmit={handleSubmit} className="max-w-2xl">
-            <div className="bg-gray-800 p-6 rounded-lg space-y-6">
-            <div className="border-b border-gray-700 pb-6">
-              <h3 className="text-lg font-semibold mb-4">Turno</h3>
-              <div>
-                <label className="block text-sm font-medium mb-2">Hora de Cambio After Hours</label>
-                <input
+          <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
+            <ConfigSection title="Turno">
+              <FormField label="Hora de Cambio After Hours">
+                <Input
                   type="time"
                   name="horaCambioAfter"
                   value={config.horaCambioAfter}
                   onChange={handleChange}
-                  className="w-full p-2 bg-gray-700 text-white rounded"
                 />
-              </div>
-            </div>
+              </FormField>
+            </ConfigSection>
 
-            <div className="border-b border-gray-700 pb-6">
-              <h3 className="text-lg font-semibold mb-4">Botellas</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Maximo de Chicas por Botella</label>
-                  <input
+            <ConfigSection title="Botellas">
+              <FormField label="Maximo de Chicas por Botella" error={fieldErrors.maxChicasBottella}>
+                <Input
                     type="number"
                     name="maxChicasBottella"
                     value={config.maxChicasBottella}
                     onChange={handleChange}
-                    className={`w-full p-2 bg-gray-700 text-white rounded ${
-                      fieldErrors.maxChicasBottella ? 'border-2 border-red-500' : ''
-                    }`}
+                  hasError={Boolean(fieldErrors.maxChicasBottella)}
                   />
-                  <FormError message={fieldErrors.maxChicasBottella} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Comision Botella &lt; 150k (%)</label>
-                  <input
+              </FormField>
+              <FormField label="Comision Botella < 150k (%)" error={fieldErrors.porcBottella100k}>
+                <Input
                     type="number"
                     name="porcBottella100k"
                     value={config.porcBottella100k}
                     onChange={handleChange}
                     step="0.01"
-                    className={`w-full p-2 bg-gray-700 text-white rounded ${
-                      fieldErrors.porcBottella100k ? 'border-2 border-red-500' : ''
-                    }`}
+                  hasError={Boolean(fieldErrors.porcBottella100k)}
                   />
-                  <FormError message={fieldErrors.porcBottella100k} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Comision Botella ≥ 150k (%)</label>
-                  <input
+              </FormField>
+              <FormField label="Comision Botella ≥ 150k (%)" error={fieldErrors.porcBottella150kMas}>
+                <Input
                     type="number"
                     name="porcBottella150kMas"
                     value={config.porcBottella150kMas}
                     onChange={handleChange}
                     step="0.01"
-                    className={`w-full p-2 bg-gray-700 text-white rounded ${
-                      fieldErrors.porcBottella150kMas ? 'border-2 border-red-500' : ''
-                    }`}
+                  hasError={Boolean(fieldErrors.porcBottella150kMas)}
                   />
-                  <FormError message={fieldErrors.porcBottella150kMas} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Valor Minimo para 150k</label>
-                  <input
+              </FormField>
+              <FormField label="Valor Minimo para 150k" error={fieldErrors.minValor150k}>
+                <Input
                     type="number"
                     name="minValor150k"
                     value={config.minValor150k}
                     onChange={handleChange}
-                    className={`w-full p-2 bg-gray-700 text-white rounded ${
-                      fieldErrors.minValor150k ? 'border-2 border-red-500' : ''
-                    }`}
+                  hasError={Boolean(fieldErrors.minValor150k)}
                   />
-                  <FormError message={fieldErrors.minValor150k} />
-                </div>
-              </div>
-            </div>
+              </FormField>
+            </ConfigSection>
 
-            <div className="border-b border-gray-700 pb-6">
-              <h3 className="text-lg font-semibold mb-4">Comisiones por Tipo</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Comision Premium Fija</label>
-                  <input
+            <ConfigSection title="Comisiones por Tipo">
+              <FormField label="Comision Premium Fija">
+                <Input
                     type="number"
                     name="comisionPremiumFija"
                     value={config.comisionPremiumFija}
                     onChange={handleChange}
-                    className="w-full p-2 bg-gray-700 text-white rounded"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Comision Normal Fija</label>
-                  <input
+              </FormField>
+              <FormField label="Comision Normal Fija">
+                <Input
                     type="number"
                     name="comisionNormalFija"
                     value={config.comisionNormalFija}
                     onChange={handleChange}
-                    className="w-full p-2 bg-gray-700 text-white rounded"
                   />
-                </div>
-              </div>
-            </div>
+              </FormField>
+            </ConfigSection>
 
             {saved && (
               <div className="bg-green-600 text-white p-3 rounded">
@@ -239,49 +212,53 @@ export default function Configuracion() {
               </div>
             )}
 
-            <button
-              type="submit"
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white p-3 rounded font-semibold"
-            >
+            <Button type="submit" fullWidth size="lg">
               Guardar Configuracion
-            </button>
-          </div>
-        </form>
+            </Button>
+          </form>
         )}
 
-        <div className="mt-8 bg-gray-800 p-6 rounded-lg">
+        <ConfigSection title="Otras Opciones">
           <h3 className="text-lg font-semibold mb-4">Otras Opciones</h3>
           <div className="space-y-3">
-            <button
+            <Button
               onClick={() => setShowUsersModal(true)}
-              className="w-full text-left p-3 hover:bg-gray-700 rounded"
+              variant="ghost"
+              fullWidth
+              className="justify-start text-left"
             >
               👥 Gestion de Usuarios
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setShowPasswordModal(true)}
-              className="w-full text-left p-3 hover:bg-gray-700 rounded"
+              variant="ghost"
+              fullWidth
+              className="justify-start text-left"
             >
               🔐 Cambiar Contraseña
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setShowLogsModal(true)}
-              className="w-full text-left p-3 hover:bg-gray-700 rounded"
+              variant="ghost"
+              fullWidth
+              className="justify-start text-left"
             >
               📋 Ver Logs de Auditoria
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => {
                 if (confirm('¿Deseas crear un backup del sistema?')) {
                   alert('✓ Backup creado: backup_' + new Date().toISOString().split('T')[0] + '.zip')
                 }
               }}
-              className="w-full text-left p-3 hover:bg-gray-700 rounded"
+              variant="ghost"
+              fullWidth
+              className="justify-start text-left"
             >
               💾 Hacer Backup
-            </button>
+            </Button>
           </div>
-        </div>
+        </ConfigSection>
 
         {/* Users Management Modal */}
         <Modal
@@ -299,9 +276,9 @@ export default function Configuracion() {
               <p className="font-medium">cajera@atenea.com</p>
               <p className="text-sm text-gray-400">Cajera - Activo</p>
             </div>
-            <button className="w-full mt-4 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded">
+            <Button fullWidth className="mt-4">
               + Agregar Usuario
-            </button>
+            </Button>
           </div>
         </Modal>
 
@@ -314,45 +291,42 @@ export default function Configuracion() {
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">Contraseña Actual</label>
-              <input
+              <Input
                 type="password"
                 value={passwordData.currentPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600"
               />
             </div>
             <div>
               <label className="block text-sm font-medium mb-2">Nueva Contraseña</label>
-              <input
+              <Input
                 type="password"
                 value={passwordData.newPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600"
               />
             </div>
             <div>
               <label className="block text-sm font-medium mb-2">Confirmar Contraseña</label>
-              <input
+              <Input
                 type="password"
                 value={passwordData.confirmPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600"
               />
             </div>
             <div className="flex gap-3 justify-end pt-4">
-              <button
+              <Button
                 type="button"
                 onClick={() => setShowPasswordModal(false)}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded font-semibold"
+                variant="secondary"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold"
+                variant="primary"
               >
                 Actualizar
-              </button>
+              </Button>
             </div>
           </form>
         </Modal>

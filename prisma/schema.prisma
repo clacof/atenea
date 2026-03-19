@@ -38,6 +38,7 @@ enum TipoCategoria {
 
 enum EstadoComanda {
   activa
+  pagada
   anulada
 }
 
@@ -101,10 +102,19 @@ model Comanda {
   cortesia            Boolean         @default(false)
   medioPago           MedioPago
   estado              EstadoComanda   @default(activa)
+  clienteNombre       String?
   usuarioId           Int
   usuario             Usuario         @relation(fields: [usuarioId], references: [id])
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
+
+  @@index([fecha])
+  @@index([estado])
+  @@index([usuarioId])
+  @@index([categoriaId])
+  @@index([chica1Id])
+  @@index([chica2Id])
+  @@index([clienteNombre])
 }
 
 model CajaTurno {
@@ -117,6 +127,8 @@ model CajaTurno {
   totalCredito      Int
   totalGeneral      Int
   responsable       String
+
+  @@index([fecha])
 }
 
 model AuditLog {

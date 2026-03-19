@@ -142,22 +142,42 @@ export class FormValidator {
 /**
  * Validaciones específicas del dominio
  */
+interface ComandaData {
+  categoriaId?: unknown
+  tipoConsumo?: unknown
+  medioPago?: unknown
+  precioBase?: unknown
+  chica1Id?: unknown
+}
+
+interface CategoriaData {
+  nombre?: unknown
+  tipo?: unknown
+  precioCliente?: unknown
+  precioChica?: unknown
+  comisionChica?: unknown
+}
+
+interface ChicaData {
+  nombre?: unknown
+}
+
 export class DomainValidator {
   // Validar comanda
-  static validateComanda(data: any): ValidationResult {
+  static validateComanda(data: ComandaData): ValidationResult {
     const validator = new FormValidator()
 
     validator
       .required(data.categoriaId, 'categoriaId')
       .required(data.tipoConsumo, 'tipoConsumo')
       .custom(
-        ['cliente', 'chica'].includes(data.tipoConsumo),
+        ['cliente', 'chica'].includes(String(data.tipoConsumo ?? '')),
         'tipoConsumo',
         'Tipo de consumo inválido'
       )
       .required(data.medioPago, 'medioPago')
       .custom(
-        ['efectivo', 'transferencia', 'debito', 'credito'].includes(data.medioPago),
+        ['efectivo', 'transferencia', 'debito', 'credito'].includes(String(data.medioPago ?? '')),
         'medioPago',
         'Medio de pago inválido'
       )
@@ -177,20 +197,24 @@ export class DomainValidator {
   }
 
   // Validar categoría
-  static validateCategoria(data: any): ValidationResult {
+  static validateCategoria(data: CategoriaData): ValidationResult {
     const validator = new FormValidator()
 
     validator
       .string(data.nombre, 'nombre', 1, 255)
-      .number(data.precioCliente, 'precioCliente', 0, 9999999)
-      .number(data.precioChica, 'precioChica', 0, 9999999)
-      .number(data.comisionChica, 'comisionChica', 0, 9999999)
+
+    if (data.tipo !== 'botella') {
+      validator
+        .number(data.precioCliente, 'precioCliente', 0, 9999999)
+        .number(data.precioChica, 'precioChica', 0, 9999999)
+        .number(data.comisionChica, 'comisionChica', 0, 9999999)
+    }
 
     return validator.getResult()
   }
 
   // Validar chica
-  static validateChica(data: any): ValidationResult {
+  static validateChica(data: ChicaData): ValidationResult {
     const validator = new FormValidator()
 
     validator.string(data.nombre, 'nombre', 1, 255)

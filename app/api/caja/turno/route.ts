@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Obtener comandas del día actual
+    // Obtener comandas del dia actual
     const hoy = new Date().toISOString().split('T')[0]
     const comandas = await prisma.comanda.findMany({
       where: {

@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
     
-    // Validación básica
+    // Validacion basica
     if (!data.nombre || !data.nombre.trim()) {
       return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
     }

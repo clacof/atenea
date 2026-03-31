@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 
 /**
- * GET: Obtener configuración de ciclo de reporte
+ * GET: Obtener configuracion de ciclo de reporte
  */
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request)
@@ -30,12 +30,12 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error fetching cycle config:', error)
-    return NextResponse.json({ error: 'Error al obtener configuración' }, { status: 500 })
+    return NextResponse.json({ error: 'Error al obtener configuracion' }, { status: 500 })
   }
 }
 
 /**
- * POST: Actualizar configuración de ciclo de reporte (solo admin)
+ * POST: Actualizar configuracion de ciclo de reporte (solo admin)
  */
 export async function POST(request: NextRequest) {
   const user = getUserFromRequest(request)
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   // Verificar que sea admin
   if (user.rol !== 'admin') {
-    return NextResponse.json({ error: 'Solo admins pueden cambiar configuración' }, { status: 403 })
+    return NextResponse.json({ error: 'Solo admins pueden cambiar configuracion' }, { status: 403 })
   }
 
   try {
@@ -53,13 +53,13 @@ export async function POST(request: NextRequest) {
 
     // Validar valores
     if (typeof horaInicio !== 'number' || horaInicio < 0 || horaInicio > 23) {
-      return NextResponse.json({ error: 'Hora inválida (0-23)' }, { status: 400 })
+      return NextResponse.json({ error: 'Hora invalida (0-23)' }, { status: 400 })
     }
     if (typeof minutoInicio !== 'number' || minutoInicio < 0 || minutoInicio > 59) {
-      return NextResponse.json({ error: 'Minuto inválido (0-59)' }, { status: 400 })
+      return NextResponse.json({ error: 'Minuto invalido (0-59)' }, { status: 400 })
     }
 
-    // Actualizar configuración
+    // Actualizar configuracion
     await prisma.configGeneral.upsert({
       where: { clave: 'HORA_INICIO_CICLO' },
       update: { valor: horaInicio.toString(), descripcion: 'Hora de inicio del ciclo de reporte (0-23)' },
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      mensaje: 'Configuración actualizada correctamente',
+      mensaje: 'Configuracion actualizada correctamente',
       horaInicio,
       minutoInicio,
       etiqueta: `${String(horaInicio).padStart(2, '0')}:${String(minutoInicio).padStart(2, '0')}`,

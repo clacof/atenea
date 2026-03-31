@@ -1,0 +1,1 @@
+ALTER TABLE "Categoria" ADD COLUMN "isAfterhour" BOOLEAN NOT NULL DEFAULT false;

@@ -1,10 +1,10 @@
 // Datos mock para desarrollo del frontend
-// Después se reemplazarán con datos reales de la BD
+// Despues se reemplazaran con datos reales de la BD
 
 export const mockCategorias = [
   {
     id: 1,
-    nombre: 'Cocktelería / Trago preparado',
+    nombre: 'Cockteleria / Trago preparado',
     precioCliente: 30000,
     precioChica: 35000,
     comisionChica: 12000,

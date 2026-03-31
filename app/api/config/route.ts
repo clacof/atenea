@@ -10,6 +10,7 @@ const CONFIG_KEYS = [
   'minValor150k',
   'comisionPremiumFija',
   'comisionNormalFija',
+  'comisionAcompananteBotella',
 ]
 
 export async function GET(request: NextRequest) {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
-  // Solo admin puede acceder a configuración
+  // Solo admin puede acceder a configuracion
   if (user.rol !== 'admin') {
     return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
     // Convertir a objeto
     const configObj: Record<string, any> = {}
     configs.forEach((config) => {
-      // Intentar parsear como número
+      // Intentar parsear como numero
       const numValue = Number(config.valor)
       configObj[config.clave] = isNaN(numValue) ? config.valor : numValue
     })
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
       minValor150k: 150000,
       comisionPremiumFija: 10000,
       comisionNormalFija: 5000,
+      comisionAcompananteBotella: 5000,
     }
 
     const finalConfig = { ...defaultConfig, ...configObj }
@@ -52,7 +54,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching config:', error)
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
-    return NextResponse.json({ error: `Error al obtener configuración: ${errorMessage}` }, { status: 500 })
+    return NextResponse.json({ error: `Error al obtener configuracion: ${errorMessage}` }, { status: 500 })
   }
 }
 
@@ -62,7 +64,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
-  // Solo admin puede modificar configuración
+  // Solo admin puede modificar configuracion
   if (user.rol !== 'admin') {
     return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
@@ -77,7 +79,7 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Actualizar cada configuración
+    // Actualizar cada configuracion
     for (const [key, value] of Object.entries(data)) {
       await prisma.configGeneral.upsert({
         where: { clave: key },
@@ -85,12 +87,12 @@ export async function PUT(request: NextRequest) {
         create: {
           clave: key,
           valor: String(value),
-          descripcion: `Configuración: ${key}`,
+          descripcion: `Configuracion: ${key}`,
         },
       })
     }
 
-    // Retornar la configuración actualizada
+    // Retornar la configuracion actualizada
     const updatedConfigs = await prisma.configGeneral.findMany()
     const configObj: Record<string, any> = {}
     updatedConfigs.forEach((config) => {
@@ -102,6 +104,6 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error('Error updating config:', error)
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
-    return NextResponse.json({ error: `Error al actualizar configuración: ${errorMessage}` }, { status: 500 })
+    return NextResponse.json({ error: `Error al actualizar configuracion: ${errorMessage}` }, { status: 500 })
   }
 }

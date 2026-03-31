@@ -1,0 +1,339 @@
+'use client'
+
+import { useEffect, useState, useCallback, useRef } from 'react'
+import Link from 'next/link'
+import DashboardLayout from '../../../components/DashboardLayout'
+import { getAuthHeaders } from '../../../lib/client-auth'
+import { formatCurrency } from '../../../lib/formatters'
+
+interface ComandaHistorial {
+  id: number
+  hora: string
+  categoria: string
+  precioFinal: number
+  chica1: string | null
+  chica2: string | null
+  cortesia: boolean
+}
+
+interface ClienteActivo {
+  clienteNombre: string
+  count: number
+  subtotal: number
+  comandas: ComandaHistorial[]
+}
+
+interface ChicaDisponibilidad {
+  id: number
+  nombre: string
+  disponible: boolean
+  clienteAtendiendo: string | null
+}
+
+interface TurnoData {
+  fecha: string
+  clientesActivos: ClienteActivo[]
+  chicas: ChicaDisponibilidad[]
+  siguienteNumeroCliente: number
+}
+
+export default function TurnoActivo() {
+  const [turno, setTurno] = useState<TurnoData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [cerrando, setCerrando] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const [expandedCliente, setExpandedCliente] = useState<string | null>(null)
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const loadTurno = useCallback(async () => {
+    try {
+      const data = await fetch('/api/comandas/turno-activo', {
+        headers: getAuthHeaders(),
+      }).then((r) => r.json())
+      setTurno(data)
+      setLastRefreshed(new Date())
+    } catch (err) {
+      console.error('Error cargando turno:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadTurno()
+    intervalRef.current = setInterval(loadTurno, 30_000)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [loadTurno])
+
+  const handleCerrarCuenta = async (clienteNombre: string) => {
+    if (
+      !confirm(
+        `Cerrar cuenta de ${clienteNombre}?\nSe marcaran todas sus comandas activas como pagadas.`,
+      )
+    )
+      return
+
+    try {
+      setCerrando(clienteNombre)
+      setError('')
+      const res = await fetch('/api/comandas/turno-activo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ clienteNombre }),
+      })
+
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error || 'Error al cerrar cuenta')
+      }
+
+      if (expandedCliente === clienteNombre) setExpandedCliente(null)
+      await loadTurno()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cerrar cuenta')
+    } finally {
+      setCerrando(null)
+    }
+  }
+
+  const disponiblesCount = turno?.chicas.filter((c) => c.disponible).length ?? 0
+  const ocupadasCount = turno?.chicas.filter((c) => !c.disponible).length ?? 0
+  const totalActivo = turno?.clientesActivos.reduce((s, c) => s + c.subtotal, 0) ?? 0
+
+  return (
+    <DashboardLayout>
+      <div>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Turno Activo</h1>
+            {turno && (
+              <p className="text-sm text-gray-400 mt-1">
+                {turno.fecha} · Proximo cliente:{' '}
+                <span className="text-purple-400 font-mono font-semibold">
+                  C{turno.siguienteNumeroCliente}
+                </span>
+                {lastRefreshed && (
+                  <span className="ml-3 text-gray-500">
+                    · {lastRefreshed.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={loadTurno}
+              className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm"
+            >
+              🔄 Actualizar
+            </button>
+            <Link
+              href="/dashboard/comandas/nueva"
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold"
+            >
+              + Nueva Comanda
+            </Link>
+          </div>
+        </div>
+
+        {/* Stats bar */}
+        {turno && (
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="bg-gray-800 rounded-xl px-4 py-3 text-center">
+              <p className="text-2xl font-bold text-purple-400">{turno.clientesActivos.length}</p>
+              <p className="text-xs text-gray-400 mt-1">Clientes activos</p>
+            </div>
+            <div className="bg-gray-800 rounded-xl px-4 py-3 text-center">
+              <p className="text-2xl font-bold text-green-400">{disponiblesCount}</p>
+              <p className="text-xs text-gray-400 mt-1">Chicas disponibles</p>
+            </div>
+            <div className="bg-gray-800 rounded-xl px-4 py-3 text-center">
+              <p className="text-2xl font-bold text-yellow-400">{formatCurrency(totalActivo)}</p>
+              <p className="text-xs text-gray-400 mt-1">Total abierto</p>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-900 text-red-200 p-3 rounded mb-4 text-sm">{error}</div>
+        )}
+
+        {loading ? (
+          <div className="text-gray-400 py-16 text-center">Cargando turno...</div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Chica availability panel */}
+            <div className="lg:col-span-1">
+              <div className="bg-gradient-to-b from-slate-800 to-slate-900/90 rounded-xl p-6 lg:mr-2 sticky top-6 border border-slate-700/70 shadow-lg shadow-black/25">
+                <div className="mb-6">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="font-semibold text-gray-100 text-sm uppercase tracking-wide">
+                      👩 Disponibilidad
+                    </h2>
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 text-xs font-semibold border border-emerald-400/25">
+                      {disponiblesCount} libre{disponiblesCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {ocupadasCount > 0 && (
+                    <p className="text-xs text-rose-300 mt-1">{ocupadasCount} ocupada{ocupadasCount !== 1 ? 's' : ''}</p>
+                  )}
+                  <div className="mt-3 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all"
+                      style={{
+                        width: `${
+                          turno?.chicas.length ? (disponiblesCount / turno.chicas.length) * 100 : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {turno?.chicas.length === 0 && (
+                    <p className="text-gray-500 text-sm">No hay chicas registradas.</p>
+                  )}
+                  {turno?.chicas.map((ch) => (
+                    <div
+                      key={ch.id}
+                      className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm border transition-colors ${
+                        ch.disponible
+                          ? 'bg-emerald-500/10 border-emerald-400/20'
+                          : 'bg-rose-500/10 border-rose-400/20'
+                      }`}
+                    >
+                      <div className="min-w-0 pr-3">
+                        <p className="font-medium text-gray-100 truncate">{ch.nombre}</p>
+                        {!ch.disponible && ch.clienteAtendiendo && (
+                          <p className="text-[11px] text-rose-200/90 truncate">Atiende: {ch.clienteAtendiendo}</p>
+                        )}
+                      </div>
+                      <span
+                        className={`text-[11px] px-2 py-1 rounded-full font-semibold shrink-0 ${
+                          ch.disponible
+                            ? 'bg-emerald-400/15 text-emerald-300 border border-emerald-300/25'
+                            : 'bg-rose-400/15 text-rose-300 border border-rose-300/25'
+                        }`}
+                      >
+                        {ch.disponible ? 'Disponible' : 'Ocupada'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Active clients panel */}
+            <div className="lg:col-span-2">
+              <h2 className="font-semibold text-gray-200 mb-4 text-sm uppercase tracking-wide">
+                🧾 Clientes activos ({turno?.clientesActivos.length ?? 0})
+              </h2>
+
+              {turno?.clientesActivos.length === 0 && (
+                <div className="bg-gray-800 rounded-xl border border-white/5 min-h-[340px] px-6 py-10 flex flex-col items-center justify-center text-center text-gray-500">
+                  <p className="text-lg">Sin clientes activos en este turno.</p>
+                  <Link
+                    href="/dashboard/comandas/nueva"
+                    className="inline-block mt-4 px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold"
+                  >
+                    + Registrar primer cliente
+                  </Link>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {turno?.clientesActivos.map((cliente) => (
+                  <div
+                    key={cliente.clienteNombre}
+                    className="bg-gray-800 rounded-xl overflow-hidden border border-white/5"
+                  >
+                    {/* Card header */}
+                    <div className="flex items-center justify-between px-5 py-4">
+                      <button
+                        onClick={() =>
+                          setExpandedCliente(
+                            expandedCliente === cliente.clienteNombre
+                              ? null
+                              : cliente.clienteNombre,
+                          )
+                        }
+                        className="flex items-center gap-3 text-left flex-1 min-w-0"
+                      >
+                        <span className="font-mono font-bold text-purple-400 text-xl">
+                          {cliente.clienteNombre}
+                        </span>
+                        <span className="text-gray-400 text-sm">
+                          {cliente.count} item{cliente.count !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-white font-semibold">
+                          {formatCurrency(cliente.subtotal)}
+                        </span>
+                        <span className="text-gray-500 text-xs ml-auto">
+                          {expandedCliente === cliente.clienteNombre ? '▲' : '▼'}
+                        </span>
+                      </button>
+                      <div className="flex gap-2 ml-4 shrink-0">
+                        <Link
+                          href={`/dashboard/comandas/nueva?cliente=${encodeURIComponent(cliente.clienteNombre)}`}
+                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium"
+                        >
+                          + Agregar
+                        </Link>
+                        <button
+                          disabled={cerrando === cliente.clienteNombre}
+                          onClick={() => handleCerrarCuenta(cliente.clienteNombre)}
+                          className="px-3 py-1.5 bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white rounded-lg text-xs font-medium"
+                        >
+                          {cerrando === cliente.clienteNombre ? '...' : 'Cerrar Cta'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expandable detail */}
+                    {expandedCliente === cliente.clienteNombre && (
+                      <div className="border-t border-gray-700 px-5 py-3">
+                        <div className="space-y-1">
+                          {cliente.comandas.map((cmd) => (
+                            <div
+                              key={cmd.id}
+                              className="flex justify-between text-sm text-gray-400 py-1.5 border-b border-gray-700/50 last:border-0"
+                            >
+                              <span>
+                                <span className="text-gray-500 mr-2">{cmd.hora}</span>
+                                {cmd.categoria}
+                                {cmd.chica1 && (
+                                  <span className="text-purple-400"> · {cmd.chica1}</span>
+                                )}
+                                {cmd.chica2 && (
+                                  <span className="text-purple-400"> + {cmd.chica2}</span>
+                                )}
+                                {cmd.cortesia && (
+                                  <span className="text-yellow-400 ml-1">(cortesia)</span>
+                                )}
+                              </span>
+                              <span className="text-white ml-4 shrink-0">
+                                {formatCurrency(cmd.precioFinal)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between font-semibold text-purple-400 mt-3 pt-3 border-t border-gray-700">
+                          <span>Total</span>
+                          <span>{formatCurrency(cliente.subtotal)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  )
+}

@@ -20,29 +20,31 @@ async function main() {
     // Config general
     await prisma.configGeneral.createMany({
       data: [
-        { clave: 'HORA_CAMBIO_AFTER', valor: '04:00', descripcion: 'Hora de cambio de turno' },
-        { clave: 'MAX_CHICAS_BOTELLA', valor: '2', descripcion: 'Maximo de chicas por botella' },
-        { clave: 'PORC_BOTELLA_100K', valor: '0.40', descripcion: 'Porcentaje comision botella < 150k' },
-        { clave: 'PORC_BOTELLA_150K_MAS', valor: '0.30', descripcion: 'Porcentaje comision botella >= 150k' },
-        { clave: 'MIN_VALOR_150K', valor: '150000', descripcion: 'Valor minimo para porcentaje 30%' },
-        { clave: 'COMISION_PREMIUM_FIJA', valor: '10000', descripcion: 'Comision fija premium' },
-        { clave: 'COMISION_NORMAL_FIJA', valor: '5000', descripcion: 'Comision fija normal' },
+        { clave: 'horaCambioAfter', valor: '04:00', descripcion: 'Hora de cambio de turno' },
+        { clave: 'maxChicasBottella', valor: '2', descripcion: 'Maximo de chicas por botella' },
+        { clave: 'porcBottella100k', valor: '0.40', descripcion: 'Porcentaje comision botella < 150k' },
+        { clave: 'porcBottella150kMas', valor: '0.30', descripcion: 'Porcentaje comision botella >= 150k' },
+        { clave: 'minValor150k', valor: '150000', descripcion: 'Valor minimo para porcentaje 30%' },
+        { clave: 'comisionPremiumFija', valor: '10000', descripcion: 'Comision fija premium' },
+        { clave: 'comisionNormalFija', valor: '5000', descripcion: 'Comision fija normal' },
+        { clave: 'comisionAcompananteBotella', valor: '5000', descripcion: 'Comision por chica adicional acompanando botella' },
       ],
     })
 
-    console.log('Configuración general creada')
+    console.log('Configuracion general creada')
 
-    // Categorías
+    // Categorias
     await prisma.categoria.createMany({
       data: [
-        { nombre: 'Cockteles / Trago preparado', precioCliente: 30000, precioChica: 35000, comisionChica: 12000 },
-        { nombre: 'Vodka naranja', precioCliente: 20000, precioChica: 25000, comisionChica: 10000 },
-        { nombre: 'Botella Premium', precioCliente: 150000, precioChica: 160000, comisionChica: 48000 },
-        { nombre: 'Botella Super Premium', precioCliente: 250000, precioChica: 270000, comisionChica: 81000 },
+        { nombre: 'Cockteles / Trago preparado', tipo: 'trago', precioCliente: 30000, precioChica: 35000, comisionChica: 12000 },
+        { nombre: 'Vodka naranja', tipo: 'trago', precioCliente: 20000, precioChica: 25000, comisionChica: 10000 },
+        { nombre: 'Botella Premium', tipo: 'botella', precio: 150000 },
+        { nombre: 'Botella Super Premium', tipo: 'botella', precio: 250000 },
+        { nombre: 'After Hour', tipo: 'trago', isAfterhour: true, precioCliente: 80000, precioChica: 80000, comisionChica: 0 },
       ],
     })
 
-    console.log('Categorías creadas')
+    console.log('Categorias creadas')
 
     // Usuario admin
     const hashedPassword = await bcrypt.hash('admin123', 10)

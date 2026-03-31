@@ -18,6 +18,7 @@ interface Categoria {
   id: number
   nombre: string
   tipo: 'trago' | 'botella'
+  isAfterhour: boolean
   precioCliente?: number
   precioChica?: number
   comisionChica?: number
@@ -37,6 +38,7 @@ interface AuthUser {
 interface FormData {
   nombre: string
   tipo: TipoCategoria
+  isAfterhour: boolean
   precioCliente: number | ''
   precioChica: number | ''
   comisionChica: number | ''
@@ -52,9 +54,11 @@ export default function Categorias() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
   const [actionId, setActionId] = useState<number | null>(null)
+  const [editingCategoriaId, setEditingCategoriaId] = useState<number | null>(null)
   const [formData, setFormData] = useState<FormData>({
     nombre: '',
     tipo: 'trago',
+    isAfterhour: false,
     precioCliente: '',
     precioChica: '',
     comisionChica: '',
@@ -70,7 +74,7 @@ export default function Categorias() {
     try {
       setLoading(true)
 
-      const response = await fetch('/api/categorias', {
+      const response = await fetch('/api/categorias?includeInactive=1', {
         headers: getAuthHeaders(),
       })
       const data = await response.json()
@@ -83,13 +87,26 @@ export default function Categorias() {
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
+    const { name, value, type } = e.target
+
+    if (type === 'checkbox') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: (e.target as HTMLInputElement).checked,
+      }))
+
+      if (fieldErrors[name]) {
+        setFieldErrors({ ...fieldErrors, [name]: '' })
+      }
+      return
+    }
     
     if (name === 'tipo') {
       // Limpiar campos cuando cambia el tipo
       setFormData(prev => ({
         nombre: prev.nombre,
         tipo: value as TipoCategoria,
+        isAfterhour: prev.isAfterhour,
         precioCliente: '',
         precioChica: '',
         comisionChica: '',
@@ -137,6 +154,42 @@ export default function Categorias() {
     return Object.keys(errors).length === 0
   }
 
+  const resetForm = () => {
+    setFormData({
+      nombre: '',
+      tipo: 'trago',
+      isAfterhour: false,
+      precioCliente: '',
+      precioChica: '',
+      comisionChica: '',
+      precio: '',
+    })
+    setFieldErrors({})
+    setError('')
+    setEditingCategoriaId(null)
+  }
+
+  const openCreateModal = () => {
+    resetForm()
+    setShowModal(true)
+  }
+
+  const openEditModal = (categoria: Categoria) => {
+    setEditingCategoriaId(categoria.id)
+    setError('')
+    setFieldErrors({})
+    setFormData({
+      nombre: categoria.nombre,
+      tipo: categoria.tipo,
+      isAfterhour: categoria.isAfterhour,
+      precioCliente: categoria.precioCliente ?? '',
+      precioChica: categoria.precioChica ?? '',
+      comisionChica: categoria.comisionChica ?? '',
+      precio: categoria.precio ?? '',
+    })
+    setShowModal(true)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -151,42 +204,47 @@ export default function Categorias() {
       const payload: any = {
         nombre: formData.nombre,
         tipo: formData.tipo,
+        isAfterhour: formData.isAfterhour,
       }
 
       if (formData.tipo === 'trago') {
         payload.precioCliente = Number(formData.precioCliente)
         payload.precioChica = Number(formData.precioChica)
         payload.comisionChica = Number(formData.comisionChica)
+        payload.precio = null
       } else {
         payload.precio = Number(formData.precio)
+        payload.precioCliente = null
+        payload.precioChica = null
+        payload.comisionChica = null
       }
 
-      const response = await fetch('/api/categorias', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
+      const isEditing = editingCategoriaId !== null
+      const response = await fetch(
+        isEditing ? `/api/categorias/${editingCategoriaId}` : '/api/categorias',
+        {
+          method: isEditing ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      })
+      )
 
       if (!response.ok) {
         const errData = await response.json()
-        throw new Error(errData.error || 'Error al crear la categoria')
+        throw new Error(
+          errData.error || (isEditing ? 'Error al actualizar la categoria' : 'Error al crear la categoria'),
+        )
       }
 
       await fetchCategorias()
-      setFormData({
-        nombre: '',
-        tipo: 'trago',
-        precioCliente: '',
-        precioChica: '',
-        comisionChica: '',
-        precio: '',
-      })
+      resetForm()
       setShowModal(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al crear la categoria')
+      const fallback = editingCategoriaId ? 'Error al actualizar la categoria' : 'Error al crear la categoria'
+      setError(err instanceof Error ? err.message : fallback)
       console.error(err)
     } finally {
       setIsSubmitting(false)
@@ -196,7 +254,7 @@ export default function Categorias() {
 
   const handleToggleActiva = async (categoria: Categoria) => {
     const accion = categoria.activa ? 'desactivar' : 'activar'
-    if (!confirm(`¿Deseas ${accion} la categoría "${categoria.nombre}"?`)) return
+    if (!confirm(`Deseas ${accion} la categoria "${categoria.nombre}"?`)) return
 
     try {
       setActionId(categoria.id)
@@ -208,19 +266,19 @@ export default function Categorias() {
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || `No se pudo ${accion} la categoría`)
+        throw new Error(data.error || `No se pudo ${accion} la categoria`)
       }
 
       await fetchCategorias()
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Error al ${accion} la categoría`)
+      setError(err instanceof Error ? err.message : `Error al ${accion} la categoria`)
     } finally {
       setActionId(null)
     }
   }
 
   const handleDelete = async (categoria: Categoria) => {
-    if (!confirm(`¿Eliminar permanentemente "${categoria.nombre}"? Esta acción no se puede deshacer.`)) return
+    if (!confirm(`Eliminar permanentemente "${categoria.nombre}"? Esta accion no se puede deshacer.`)) return
 
     try {
       setActionId(categoria.id)
@@ -231,19 +289,29 @@ export default function Categorias() {
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'No se pudo eliminar la categoría')
+        throw new Error(data.error || 'No se pudo eliminar la categoria')
       }
 
       await fetchCategorias()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al eliminar la categoría')
+      setError(err instanceof Error ? err.message : 'Error al eliminar la categoria')
     } finally {
       setActionId(null)
     }
   }
 
   const accionesCell = (categoria: Categoria) => (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-1.5">
+      {['admin', 'supervisor'].includes(currentUser?.rol ?? '') && (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={actionId === categoria.id}
+          onClick={() => openEditModal(categoria)}
+        >
+          Editar
+        </Button>
+      )}
       {['admin', 'supervisor'].includes(currentUser?.rol ?? '') && (
         <Button
           size="sm"
@@ -277,21 +345,59 @@ export default function Categorias() {
   )
 
   const tragosColumns: DataTableColumn<Categoria>[] = [
-    { key: 'id', header: 'ID', cell: (categoria) => categoria.id },
-    { key: 'nombre', header: 'Nombre', cell: (categoria) => categoria.nombre },
-    { key: 'precioCliente', header: 'Precio Cliente', cell: (categoria) => formatCurrency(categoria.precioCliente ?? 0) },
-    { key: 'precioChica', header: 'Precio Chica', cell: (categoria) => formatCurrency(categoria.precioChica ?? 0) },
-    { key: 'comision', header: 'Comision Chica', cell: (categoria) => formatCurrency(categoria.comisionChica ?? 0) },
-    { key: 'estado', header: 'Estado', cell: statusCell },
-    { key: 'acciones', header: 'Acciones', cell: accionesCell },
+    { key: 'id', header: 'ID', className: 'hidden sm:table-cell w-12', cell: (categoria) => categoria.id },
+    {
+      key: 'nombre',
+      header: 'Nombre',
+      cell: (categoria) => (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+          <span className="font-medium">{categoria.nombre}</span>
+          <div className="flex gap-1 flex-wrap">
+            {categoria.isAfterhour && (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300">Afterhour</span>
+            )}
+            {!categoria.activa && (
+              <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs text-red-300 sm:hidden">Inactiva</span>
+            )}
+          </div>
+          <div className="flex gap-1 text-xs text-gray-400 sm:hidden">
+            <span>{formatCurrency(categoria.precioCliente ?? 0)}</span>
+            <span>/</span>
+            <span>{formatCurrency(categoria.precioChica ?? 0)}</span>
+          </div>
+        </div>
+      ),
+    },
+    { key: 'precioCliente', header: 'P. Cliente', className: 'hidden sm:table-cell', cell: (categoria) => formatCurrency(categoria.precioCliente ?? 0) },
+    { key: 'precioChica', header: 'P. Chica', className: 'hidden sm:table-cell', cell: (categoria) => formatCurrency(categoria.precioChica ?? 0) },
+    { key: 'comision', header: 'Comision', className: 'hidden md:table-cell', cell: (categoria) => formatCurrency(categoria.comisionChica ?? 0) },
+    { key: 'estado', header: 'Estado', className: 'hidden sm:table-cell', cell: statusCell },
+    { key: 'acciones', header: '', cell: accionesCell },
   ]
 
   const botellasColumns: DataTableColumn<Categoria>[] = [
-    { key: 'id', header: 'ID', cell: (categoria) => categoria.id },
-    { key: 'nombre', header: 'Nombre', cell: (categoria) => categoria.nombre },
-    { key: 'precio', header: 'Precio', cell: (categoria) => formatCurrency(categoria.precio ?? 0) },
-    { key: 'estado', header: 'Estado', cell: statusCell },
-    { key: 'acciones', header: 'Acciones', cell: accionesCell },
+    { key: 'id', header: 'ID', className: 'hidden sm:table-cell w-12', cell: (categoria) => categoria.id },
+    {
+      key: 'nombre',
+      header: 'Nombre',
+      cell: (categoria) => (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+          <span className="font-medium">{categoria.nombre}</span>
+          <div className="flex gap-1 flex-wrap">
+            {categoria.isAfterhour && (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300">Afterhour</span>
+            )}
+            {!categoria.activa && (
+              <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs text-red-300 sm:hidden">Inactiva</span>
+            )}
+          </div>
+          <span className="text-xs text-gray-400 sm:hidden">{formatCurrency(categoria.precio ?? 0)}</span>
+        </div>
+      ),
+    },
+    { key: 'precio', header: 'Precio', className: 'hidden sm:table-cell', cell: (categoria) => formatCurrency(categoria.precio ?? 0) },
+    { key: 'estado', header: 'Estado', className: 'hidden sm:table-cell', cell: statusCell },
+    { key: 'acciones', header: '', cell: accionesCell },
   ]
 
   return (
@@ -300,7 +406,7 @@ export default function Categorias() {
         <PageHeader
           title="Categorias"
           description="Agrupa tragos y botellas con precios y comisiones consistentes."
-          actions={<Button onClick={() => setShowModal(true)}>+ Agregar Categoria</Button>}
+          actions={<Button onClick={openCreateModal}>+ Agregar Categoria</Button>}
         />
 
         {loading ? (
@@ -308,23 +414,33 @@ export default function Categorias() {
         ) : (
           <div className="space-y-8">
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-purple-400">🍹 Tragos</h2>
-              <DataTable
-                columns={tragosColumns}
-                data={tragos}
-                getRowKey={(categoria) => categoria.id}
-                emptyTitle="No hay tragos registrados"
-              />
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-base sm:text-xl font-semibold text-purple-400">🍹 Tragos o vasos</h2>
+                <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{tragos.length}</span>
+              </div>
+              <div className="overflow-x-auto rounded-xl">
+                <DataTable
+                  columns={tragosColumns}
+                  data={tragos}
+                  getRowKey={(categoria) => categoria.id}
+                  emptyTitle="No hay tragos registrados"
+                />
+              </div>
             </div>
 
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-blue-400">🍾 Botellas</h2>
-              <DataTable
-                columns={botellasColumns}
-                data={botellas}
-                getRowKey={(categoria) => categoria.id}
-                emptyTitle="No hay botellas registradas"
-              />
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-base sm:text-xl font-semibold text-blue-400">🍾 Botellas</h2>
+                <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{botellas.length}</span>
+              </div>
+              <div className="overflow-x-auto rounded-xl">
+                <DataTable
+                  columns={botellasColumns}
+                  data={botellas}
+                  getRowKey={(categoria) => categoria.id}
+                  emptyTitle="No hay botellas registradas"
+                />
+              </div>
             </div>
           </div>
         )}
@@ -333,10 +449,9 @@ export default function Categorias() {
           isOpen={showModal}
           onClose={() => {
             setShowModal(false)
-            setFieldErrors({})
-            setError('')
+            resetForm()
           }}
-          title="Agregar Nueva Categoria"
+          title={editingCategoriaId ? 'Editar Categoria' : 'Agregar Nueva Categoria'}
         >
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
@@ -367,8 +482,19 @@ export default function Categorias() {
               />
             </FormField>
 
+            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                name="isAfterhour"
+                checked={formData.isAfterhour}
+                onChange={handleChange}
+                className="accent-purple-500"
+              />
+              Categoria afterhour (comision solo casa)
+            </label>
+
             {formData.tipo === 'trago' && (
-              <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <FormField label="Precio Cliente" error={fieldErrors.precioCliente}>
                   <Input
                     type="number"
@@ -401,7 +527,7 @@ export default function Categorias() {
                     hasError={Boolean(fieldErrors.comisionChica)}
                   />
                 </FormField>
-              </>
+              </div>
             )}
 
             {formData.tipo === 'botella' && (
@@ -422,8 +548,7 @@ export default function Categorias() {
                 type="button"
                 onClick={() => {
                   setShowModal(false)
-                  setFieldErrors({})
-                  setError('')
+                  resetForm()
                 }}
                 variant="secondary"
               >
@@ -433,7 +558,11 @@ export default function Categorias() {
                 type="submit"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Guardando...' : 'Agregar Categoria'}
+                {isSubmitting
+                  ? 'Guardando...'
+                  : editingCategoriaId
+                    ? 'Guardar Cambios'
+                    : 'Agregar Categoria'}
               </Button>
             </div>
           </form>

@@ -48,7 +48,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { estado } = data
 
     if (!['activa', 'pagada', 'anulada'].includes(estado)) {
-      return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
+      return NextResponse.json({ error: 'Estado invalido' }, { status: 400 })
     }
 
     const comanda = await prisma.comanda.update({

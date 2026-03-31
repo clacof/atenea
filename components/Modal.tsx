@@ -23,21 +23,21 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
       onClick={handleBackdropClick}
     >
-      <div className="bg-gray-800 rounded-lg max-w-md w-full shadow-xl border border-gray-700">
-        <div className="border-b border-gray-700 p-4 flex justify-between items-center">
-          <h2 className="text-xl font-bold">{title}</h2>
+      <div className="bg-gray-800 rounded-t-2xl sm:rounded-xl max-w-lg w-full shadow-2xl border border-gray-700 flex flex-col max-h-[92dvh] sm:max-h-[90dvh]">
+        <div className="border-b border-gray-700 px-5 py-4 flex justify-between items-center shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl leading-none"
+            className="text-gray-400 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-700 transition-colors"
           >
             ×
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-5 sm:p-6 overflow-y-auto">
           {children}
         </div>
       </div>

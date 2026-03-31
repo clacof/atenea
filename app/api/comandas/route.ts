@@ -3,6 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import { calculateComision } from '@/lib/businessRules'
 
+function getTodayBounds() {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+  return { start, end }
+}
+
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request)
   if (!user) {
@@ -46,6 +53,7 @@ export async function POST(request: NextRequest) {
       tipoConsumo,
       chica1Id,
       chica2Id,
+      chicasAdicionalesBotella,
       descuentoPorcentaje,
       descuentoMonto,
       cortesia,
@@ -53,7 +61,7 @@ export async function POST(request: NextRequest) {
       clienteNombre,
     } = data
 
-    // Validación de campos requeridos
+    // Validacion de campos requeridos
     if (!categoriaId) {
       return NextResponse.json({ error: 'Categoria es requerida' }, { status: 400 })
     }
@@ -62,6 +70,18 @@ export async function POST(request: NextRequest) {
     }
     if (!medioPago) {
       return NextResponse.json({ error: 'Medio de pago es requerido' }, { status: 400 })
+    }
+
+    const clienteNombreSanitized =
+      typeof clienteNombre === 'string' && clienteNombre.trim() !== ''
+        ? clienteNombre.trim().toUpperCase().slice(0, 100)
+        : null
+
+    if (!clienteNombreSanitized || !/^C\d+$/.test(clienteNombreSanitized)) {
+      return NextResponse.json(
+        { error: 'El cliente es requerido y debe tener formato C1, C2, C3...' },
+        { status: 400 },
+      )
     }
 
     // Run all reads + write atomically
@@ -76,21 +96,107 @@ export async function POST(request: NextRequest) {
         throw Object.assign(new Error('Categoria no encontrada'), { statusCode: 400 })
       }
 
-      if (chica1Id) {
-        const chica1 = await tx.chica.findUnique({ where: { id: chica1Id } })
-        if (!chica1 || !chica1.activa) {
-          throw Object.assign(new Error('Chica 1 no encontrada'), { statusCode: 400 })
+      const { start, end } = getTodayBounds()
+
+      const configRows = await tx.configGeneral.findMany({
+        where: {
+          clave: {
+            in: [
+              'comisionNormalFija',
+              'COMISION_NORMAL_FIJA',
+              'maxChicasBottella',
+              'MAX_CHICAS_BOTELLA',
+              'comisionAcompananteBotella',
+            ],
+          },
+        },
+      })
+      const configMap = new Map(configRows.map((row) => [row.clave, Number(row.valor)]))
+      const normalCommissionValue =
+        configMap.get('comisionNormalFija') ?? configMap.get('COMISION_NORMAL_FIJA') ?? 5000
+      const maxChicasBotella =
+        configMap.get('maxChicasBottella') ?? configMap.get('MAX_CHICAS_BOTELLA') ?? 2
+      const comisionAcompananteBotella =
+        configMap.get('comisionAcompananteBotella') ?? normalCommissionValue
+
+      const validateChicaDisponible = async (id: number, label: string) => {
+        const chica = await tx.chica.findUnique({ where: { id } })
+        if (!chica || !chica.activa) {
+          throw Object.assign(new Error(`${label} no encontrada`), { statusCode: 400 })
         }
+
+        const ocupacion = await tx.comanda.findFirst({
+          where: {
+            estado: 'activa',
+            fecha: { gte: start, lte: end },
+            OR: [{ chica1Id: id }, { chica2Id: id }],
+          },
+          select: { clienteNombre: true },
+        })
+
+        if (ocupacion && ocupacion.clienteNombre && ocupacion.clienteNombre !== clienteNombreSanitized) {
+          throw Object.assign(
+            new Error(`${label} esta ocupada atendiendo ${ocupacion.clienteNombre}`),
+            { statusCode: 409 },
+          )
+        }
+      }
+
+      if (chica1Id) {
+        await validateChicaDisponible(chica1Id, 'Chica 1')
       }
 
       if (chica2Id) {
-        const chica2 = await tx.chica.findUnique({ where: { id: chica2Id } })
-        if (!chica2 || !chica2.activa) {
-          throw Object.assign(new Error('Chica 2 no encontrada'), { statusCode: 400 })
+        await validateChicaDisponible(chica2Id, 'Chica 2')
+      }
+
+      const ocupadasHoy = await tx.comanda.findMany({
+        where: {
+          estado: 'activa',
+          fecha: { gte: start, lte: end },
+        },
+        select: { chica1Id: true, chica2Id: true, clienteNombre: true },
+      })
+      const ocupadasPorOtroCliente = new Set<number>()
+      for (const item of ocupadasHoy) {
+        if (item.clienteNombre === clienteNombreSanitized) continue
+        if (item.chica1Id) ocupadasPorOtroCliente.add(item.chica1Id)
+        if (item.chica2Id) ocupadasPorOtroCliente.add(item.chica2Id)
+      }
+      const chicasDisponiblesCount = await tx.chica.count({
+        where: {
+          activa: true,
+          id: {
+            notIn: Array.from(ocupadasPorOtroCliente),
+          },
+        },
+      })
+
+      if (categoria.tipo === 'botella') {
+        const adicionales = Number(chicasAdicionalesBotella ?? 0)
+        if (adicionales < 0) {
+          throw Object.assign(new Error('La cantidad de chicas adicionales no puede ser negativa'), {
+            statusCode: 400,
+          })
+        }
+        if (adicionales > maxChicasBotella) {
+          throw Object.assign(
+            new Error(`La botella permite maximo ${maxChicasBotella} chicas adicionales`),
+            { statusCode: 400 },
+          )
+        }
+        if (adicionales > chicasDisponiblesCount) {
+          throw Object.assign(
+            new Error(`Solo hay ${chicasDisponiblesCount} chicas disponibles para acompanar`),
+            { statusCode: 409 },
+          )
         }
       }
 
-      const precioBase = tipoConsumo === 'cliente' ? categoria.precioCliente : categoria.precioChica
+      const precioBase =
+        tipoConsumo === 'cliente'
+          ? (categoria.precioCliente ?? categoria.precio)
+          : categoria.precioChica
       if (!precioBase) {
         throw Object.assign(
           new Error('La categoria no tiene precio configurado para este tipo de consumo'),
@@ -101,6 +207,10 @@ export async function POST(request: NextRequest) {
       const { precioFinal, comisionTotal, comisionChica1, comisionChica2 } = calculateComision({
         precioBase,
         tipoConsumo,
+        categoriaTipo: categoria.tipo,
+        isAfterhour: categoria.isAfterhour,
+        chicasAdicionalesBotella: Number(chicasAdicionalesBotella ?? 0),
+        comisionPorChicaBotella: comisionAcompananteBotella,
         cortesia: cortesia ?? false,
         descuentoMonto: descuentoMonto ?? null,
         descuentoPorcentaje: descuentoPorcentaje ?? null,
@@ -109,11 +219,6 @@ export async function POST(request: NextRequest) {
       })
 
       const hora = new Date().toTimeString().split(' ')[0]
-
-      const clienteNombreSanitized =
-        typeof clienteNombre === 'string' && clienteNombre.trim() !== ''
-          ? clienteNombre.trim().slice(0, 100)
-          : null
 
       return tx.comanda.create({
         data: {

@@ -39,7 +39,7 @@ export default function Caja() {
   }, [])
 
   const handleCloseTurno = async () => {
-    if (!cajaTurno || confirm('¿Deseas cerrar el turno? Esta accion no se puede deshacer.')) {
+    if (!cajaTurno || confirm('Deseas cerrar el turno? Esta accion no se puede deshacer.')) {
       setIsClosing(true)
       try {
         const response = await fetch('/api/caja/turno', {
@@ -59,7 +59,7 @@ export default function Caja() {
             `- Transferencia: $${cajaTurno.totalTransferencia.toLocaleString()}\n` +
             `- Debito: $${cajaTurno.totalDebito.toLocaleString()}\n` +
             `- Credito: $${cajaTurno.totalCredito.toLocaleString()}\n` +
-            '\n🔗 Link público: https://yellow-banks-divide.loca.lt\n'
+            '\n🔗 Link publico: https://yellow-banks-divide.loca.lt\n'
           )
           // Recargar datos
           location.reload()
@@ -154,7 +154,7 @@ export default function Caja() {
                 </div>
               </div>
               <div className="p-3 bg-gray-700 rounded">
-                <p className="text-sm text-gray-400">Débito: {porcentajeDebito}%</p>
+                <p className="text-sm text-gray-400">Debito: {porcentajeDebito}%</p>
                 <div className="w-full bg-gray-600 rounded-full h-2 mt-1">
                   <div
                     className="bg-purple-500 h-2 rounded-full"
@@ -164,7 +164,7 @@ export default function Caja() {
               </div>
               {porcentajeCredito > 0 && (
                 <div className="p-3 bg-gray-700 rounded">
-                  <p className="text-sm text-gray-400">Crédito: {porcentajeCredito}%</p>
+                  <p className="text-sm text-gray-400">Credito: {porcentajeCredito}%</p>
                   <div className="w-full bg-gray-600 rounded-full h-2 mt-1">
                     <div
                       className="bg-orange-500 h-2 rounded-full"

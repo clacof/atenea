@@ -5,13 +5,15 @@ import { usePathname } from 'next/navigation'
 
 const menuItems = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
+  { name: 'Turno Activo', href: '/dashboard/turno', icon: '🟢' },
   { name: 'Nueva Comanda', href: '/dashboard/comandas/nueva', icon: '➕' },
   { name: 'Comandas', href: '/dashboard/comandas', icon: '📋' },
   { name: 'Caja', href: '/dashboard/caja', icon: '💰' },
   { name: 'Chicas', href: '/dashboard/chicas', icon: '👩' },
-  { name: 'Categorías', href: '/dashboard/categorias', icon: '🏷️' },
+  { name: 'Categorias', href: '/dashboard/categorias', icon: '🏷️' },
   { name: 'Reportes', href: '/dashboard/reportes', icon: '📈' },
-  { name: 'Configuración', href: '/dashboard/config', icon: '⚙️' },
+  { name: 'Usuarios', href: '/dashboard/usuarios', icon: '👤' },
+  { name: 'Configuracion', href: '/dashboard/config', icon: '⚙️' },
 ]
 
 export default function Sidebar() {

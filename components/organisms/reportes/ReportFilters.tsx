@@ -60,7 +60,7 @@ export default function ReportFilters({
 
         {tipoReporte === 'anual' ? (
           <div>
-            <FormField label="Año">
+            <FormField label="Ano">
               <Input type="number" min="2020" max="2100" value={anioSeleccionado} onChange={(event) => onAnioChange(event.target.value)} className="w-32" />
             </FormField>
           </div>

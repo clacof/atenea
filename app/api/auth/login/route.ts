@@ -41,22 +41,22 @@ export async function POST(request: NextRequest) {
       typeof (body as Record<string, unknown>).email !== 'string' ||
       typeof (body as Record<string, unknown>).password !== 'string'
     ) {
-      return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 400 })
+      return NextResponse.json({ error: 'Credenciales invalidas' }, { status: 400 })
     }
 
     const { email, password } = body as { email: string; password: string }
     if (email.length > 254 || password.length > 256) {
-      return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 400 })
+      return NextResponse.json({ error: 'Credenciales invalidas' }, { status: 400 })
     }
 
     const user = await prisma.usuario.findUnique({ where: { email } })
     if (!user || !user.activo) {
-      return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 })
+      return NextResponse.json({ error: 'Credenciales invalidas' }, { status: 401 })
     }
 
     const isValid = await bcrypt.compare(password, user.passwordHash)
     if (!isValid) {
-      return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 })
+      return NextResponse.json({ error: 'Credenciales invalidas' }, { status: 401 })
     }
 
     await prisma.usuario.update({

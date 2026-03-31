@@ -22,10 +22,10 @@ export async function POST() {
       },
     })
 
-    // Crear categorías de ejemplo
+    // Crear categorias de ejemplo
     await prisma.categoria.create({
       data: {
-        nombre: 'Cocktelería / Trago preparado',
+        nombre: 'Cockteleria / Trago preparado',
         precioCliente: 30000,
         precioChica: 35000,
         comisionChica: 12000,

@@ -1,402 +1,172 @@
-# ATENEA Night Club - Documentación Completa
+# ATENEA Night Club - Documentacion Tecnica
 
-## 📋 Tabla de Contenidos
-1. [Introducción](#introducción)
-2. [Instalación](#instalación)
-3. [Uso del Sistema](#uso-del-sistema)
-4. [API Reference](#api-reference)
-5. [Autenticación](#autenticación)
-6. [Validaciones](#validaciones)
-7. [Estructura Base de Datos](#estructura-base-de-datos)
-8. [Troubleshooting](#troubleshooting)
+## 1. Resumen
 
----
+ATENEA es una aplicacion para operacion diaria de nightclub con foco en:
+- comandas por cliente
+- asignacion de chicas
+- reglas de comision
+- control de caja
+- reportes diarios
 
-## Introducción
+Stack principal:
+- Next.js 16
+- React 19
+- TypeScript
+- Prisma 6 + SQLite
 
-**ATENEA Night Club** es un sistema operativo completo diseñado específicamente para gestionar:
-- Control de comandas/órdenes
-- Gestión de chicas y categorías
-- Caja y medio de pago
-- Reportes y estadísticas
-- Configuración del sistema
-
-### Características Principales
-✅ Autenticación JWT con roles (admin/caja/supervisor)
-✅ Base de datos SQLite con Prisma ORM
-✅ APIs RESTful completas con validaciones
-✅ Frontend React con TypeScript y Tailwind CSS
-✅ 23 endpoints operacionales
-✅ Sistema de validaciones robusto
-✅ Control de acceso basado en roles
-
----
-
-## Instalación
-
-### Prerrequisitos
-- Node.js 18+
-- npm o yarn
-- SQLite3 (incluido con Node)
-
-### Setup Inicial
+## 2. Setup
 
 ```bash
-# 1. Clonar repositorio
-cd /Users/clacof/code/Atenea/atenea
-
-# 2. Instalar dependencias
 npm install
-
-# 3. Inicializar base de datos
 npx prisma migrate deploy
-
-# 4. Cargar datos de prueba
-npx prisma db seed
-
-# 5. Iniciar servidor de desarrollo
+npm run db:seed
 npm run dev
 ```
 
-### Acceder
-- URL: `http://localhost:3000`
-- Email: `admin@atenea.com`
-- Password: `admin123`
-
----
-
-## Uso del Sistema
-
-### Dashboard Principal 📊
-- **KPIs en tiempo real**: Ventas, Comisiones, Comandas, Promedio
-- **Últimas Comandas**: Tabla con actividad reciente
-- **Navegación**: Lado izquierdo con menú principal
-
-### Gestión de Comandas 📋
-**Crear Nueva Comanda:**
-1. Click en "Comandas" → "Nueva Comanda"
-2. Seleccionar Categoría (requerido)
-3. Elegir Tipo: Cliente o Chica
-4. Si es Chica, seleccionar chica (requerido)
-5. Opcional: Descuentos, Cortesía
-6. Seleccionar Medio de Pago
-7. Click "Crear Comanda"
-
-**Ver Comandas:**
-- Lista completa con estado (activa/anulada)
-- Búsqueda por categoría (próxima versión)
-- Editar estado o eliminar
-
-### Control de Caja 💰
-- **Resumen del día**: Totales por tipo de pago
-- **Gráficos**: Distribución porcentual
-- **Cierre de turno**: Guardar totales diarios
-
-### Reportes 📈
-- **KPIs consolidados**: Ventas, comisiones, promedio ticket
-- **Desglose por medio**: Efectivo, transferencia, débito, crédito
-- **Exportar**: Excel, PDF (botones listos)
-
-### Configuración ⚙️
-- **Parámetros del sistema**: Comisiones, horarios, porcentajes
-- **Gestión de usuarios**: (UI lista para implementar)
-- **Backup**: Crear respaldos
-
----
-
-## API Reference
-
-### Autenticación
-```
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "email": "admin@atenea.com",
-  "password": "admin123"
-}
-
-Response:
-{
-  "id": 1,
-  "email": "admin@atenea.com",
-  "rol": "admin",
-  "token": "eyJhbGc...",
-  "user": {...}
-}
-```
-
-### Comandas
-```
-GET    /api/comandas              # Listar todas
-POST   /api/comandas              # Crear
-GET    /api/comandas/:id          # Obtener una
-PATCH  /api/comandas/:id          # Actualizar estado
-DELETE /api/comandas/:id          # Eliminar (admin/supervisor)
-```
-
-### Categorías
-```
-GET    /api/categorias            # Listar todas
-POST   /api/categorias            # Crear
-GET    /api/categorias/:id        # Obtener una
-PUT    /api/categorias/:id        # Actualizar
-DELETE /api/categorias/:id        # Soft delete
-```
-
-### Chicas
-```
-GET    /api/chicas                # Listar todas
-POST   /api/chicas                # Crear
-GET    /api/chicas/:id            # Obtener una
-PUT    /api/chicas/:id            # Actualizar
-DELETE /api/chicas/:id            # Soft delete
-```
-
-### Caja/Turno
-```
-GET    /api/caja/turno            # Resumen del día
-POST   /api/caja/turno            # Cierre de turno
-```
-
-### Reportes
-```
-GET    /api/reportes              # Reportes completosdel día
-```
-
-### Configuración
-```
-GET    /api/config                # Obtener valores
-PUT    /api/config                # Actualizar valores (admin)
-```
-
----
-
-## Autenticación
-
-### Bearer Token
-Todos los endpoints requieren token JWT excepto `/api/auth/login`:
+Produccion local:
 
 ```bash
-curl -H "Authorization: Bearer <token>" \
-  http://localhost:3000/api/categorias
+npm run build
+npm run start
 ```
 
-### Roles y Permisos
+## 3. Autenticacion y Sesion
 
-| Rol | Permisos |
-|-----|----------|
-| admin | Todo: crear, editar, eliminar, config |
-| caja | Ver datos, crear comandas, cerrar turno |
-| supervisor | Ver, crear, editar estados |
+- Login: POST /api/auth/login
+- Logout: POST /api/auth/logout
+- El token se guarda en cookie httpOnly (token)
+- Duracion de sesion: 8 horas
+- Cliente guarda datos auxiliares en localStorage (usuario y expiracion)
 
-### Token Expiration
-- Duración: 8 horas
-- Refresh: No automático (volver a login)
+## 4. Reglas de Negocio Clave
 
----
+### 4.1 Cliente correlativo diario
 
-## Validaciones
+- Formato esperado: C1, C2, C3...
+- El correlativo se calcula por dia desde /api/comandas/turno-activo
 
-### Frontend Validations
-Implementadas en `lib/validations.ts`:
+### 4.2 Disponibilidad de chicas
 
-**Comanda:**
-- ✅ Categoría requerida
-- ✅ Tipo consumo válido (cliente/chica)
-- ✅ Si chica → chica1Id requerido
-- ✅ Medio de pago válido
+- Una chica se considera ocupada si esta en una comanda activa del dia
+- Se bloquea asignar una chica ocupada por otro cliente
 
-**Categoría:**
-- ✅ Nombre 1-255 chars
-- ✅ Precios > 0
+### 4.3 Afterhour
 
-**Configuración:**
-- ✅ maxChicasBottella: 1-10
-- ✅ Porcentajes: 0-1
-- ✅ Valores mínimos: > 0
+- La categoria define isAfterhour
+- Si isAfterhour=true, la comision para chicas es 0
 
-### Backend Validations
-Todas las validaciones se repiten en el servidor para seguridad.
+### 4.4 Botellas con acompanantes
 
----
+- Para categoria tipo botella y consumo cliente:
+- Se permite delta por chicas adicionales
+- La comision por acompanante es configurable (comisionAcompananteBotella)
+- Se valida maximo permitido por configuracion
 
-## Estructura Base de Datos
+## 5. API Reference
 
-### Modelos Principales
+### 5.1 Auth
+- POST /api/auth/login
+- POST /api/auth/logout
 
-```
-Usuario
-├── id (PK)
-├── email (único)
-├── password (hash)
-├── rol (admin/caja/supervisor)
-└── activo (bool)
+### 5.2 Comandas
+- GET /api/comandas
+- POST /api/comandas
+- GET /api/comandas/:id
+- PATCH /api/comandas/:id
+- DELETE /api/comandas/:id
+- GET /api/comandas/turno-activo
+- POST /api/comandas/turno-activo
 
-Comanda
-├── id (PK)
-├── categoriaId (FK)
-├── tipoConsumo (cliente/chica)
-├── chica1Id (FK nullable)
-├── chica2Id (FK nullable)
-├── precioBase, precioFinal
-├── comisionTotal, comisionChica1, comisionChica2
-├── medioPago (efectivo/transferencia/debito/credito)
-├── estado (activa/anulada)
-├── fecha, hora
-└── usuarioId (FK)
+### 5.3 Catalogos
+- GET /api/categorias
+- POST /api/categorias
+- GET /api/categorias/:id
+- PUT /api/categorias/:id
+- DELETE /api/categorias/:id
+- GET /api/chicas
+- POST /api/chicas
+- GET /api/chicas/:id
+- PUT /api/chicas/:id
+- DELETE /api/chicas/:id
 
-Categoria
-├── id (PK)
-├── nombre
-├── precioCliente
-├── precioChica
-├── comisionChica
-└── activa (bool)
+### 5.4 Operacion
+- GET /api/caja/turno
+- POST /api/caja/turno
+- GET /api/reportes
+- GET /api/stats
+- GET /api/health
+- GET /api/config
+- PUT /api/config
 
-Chica
-├── id (PK)
-├── nombre
-└── activa (bool)
+### 5.5 Utilidades de desarrollo
+- POST /api/setup
+- POST /api/seed
 
-CajaTurno
-├── id (PK)
-├── fecha
-├── turno
-├── totalEfectivo
-├── totalTransferencia
-├── totalDebito
-├── totalCredito
-└── responsable (FK)
+## 6. Configuracion Persistente (ConfigGeneral)
 
-ConfigGeneral
-├── id (PK)
-├── clave (único)
-├── valor
-└── descripcion
+Claves activas:
+- horaCambioAfter
+- maxChicasBottella
+- porcBottella100k
+- porcBottella150kMas
+- minValor150k
+- comisionPremiumFija
+- comisionNormalFija
+- comisionAcompananteBotella
 
-AuditLog
-├── id (PK)
-├── usuarioId (FK)
-├── accion
-├── detalles
-└── fecha
-```
+## 7. Modelos de Datos (Resumen)
 
----
+- Usuario
+- Categoria (incluye tipo e isAfterhour)
+- Chica
+- Comanda (incluye clienteNombre, estado, comisiones)
+- CajaTurno
+- ConfigGeneral
+- AuditLog
 
-## Troubleshooting
+Ver esquema fuente en prisma/schema.prisma.
 
-### "Puerto 3000 en uso"
+## 8. Frontend
+
+Pantallas principales:
+- /login
+- /dashboard
+- /dashboard/comandas
+- /dashboard/comandas/nueva
+- /dashboard/turno
+- /dashboard/chicas
+- /dashboard/categorias
+- /dashboard/caja
+- /dashboard/reportes
+- /dashboard/config
+
+## 9. Troubleshooting
+
+### Error de chunks de Turbopack
+
 ```bash
-# Matar proceso anterior
-killall node
+pkill -f 'node|next' || true
+rm -rf .next node_modules/.cache node_modules/.turbopack
 npm run dev
 ```
 
-### "No se puede conectar a BD"
-```bash
-# Verificar base de datos
-ls -la ./prisma/dev.db
+### Puerto en uso
 
-# Reinicializar si es necesario
-npx prisma migrate reset
+```bash
+lsof -ti tcp:3000 tcp:3001 | xargs kill -9
+npm run dev
 ```
 
-### "Token inválido"
-- Log out y vuelve a hacer login
-- Limpia localStorage: `localStorage.clear()`
+### Prisma no actualizado
 
-### "Error de CORS"
-- Verifica headers en API routes
-- Usualmente configurado en Middleware
+```bash
+npx prisma migrate deploy
+npx prisma generate
+```
 
-### Validaciones fallando
-- Revisa console del navegador (F12)
-- Verificar que los datos cumplan con tipos (número, string, etc)
+## 10. Estado de Documentacion
 
----
-
-## Archivos Clave
-
-### Backend
-- `/app/api/` - Endpoints RESTful
-- `/lib/auth.ts` - Autenticación JWT
-- `/lib/prisma.ts` - Cliente base de datos
-- `/lib/validations.ts` - Sistema de validaciones
-- `/prisma/schema.prisma` - Esquema DB
-
-### Frontend
-- `/app/dashboard/` - Páginas principales
-- `/components/` - Componentes reutilizables
-- `/app/login/page.tsx` - Login
-
-### Testing
-- `/test-api.sh` - Script de testing de APIs
-
----
-
-## Historial de Implementación
-
-### FASE 1: Base de Datos ✅ (Completada)
-- SQLite + Prisma 6
-- Schema con 7 modelos
-- Seed data
-
-### FASE 2: Frontend-API ✅ (Completada)
-- JWT implementation
-- Páginas conectadas
-
-### FASE 3: Endpoints CRUD ✅ (Completada)
-- 5 categorías × 5 operaciones = 25 endpoints
-- Control de acceso
-
-### FASE 4: Reportes/Config ✅ (Completada)
-- Reportes con agregaciones
-- Sistema de configuración
-
-### FASE 5: Validaciones ✅ (Completada)
-- Sistema modular de validaciones
-- Errores específicos por campo
-
-### FASE 6: Testing y QA ✅ (Completada)
-- 17 tests automatizados
-- 100% de endpoints cubiertos
-- Validación de roles/permisos
-
----
-
-## Roadmap Futuro
-
-### Próximas Mejoras
-- [ ] Gráficos en tiempo real (Chart.js)
-- [ ] Búsqueda y filtros avanzados
-- [ ] Exportación a Excel/PDF genuina
-- [ ] Sistema de notificaciones
-- [ ] App móvil (React Native)
-- [ ] Sincronización en tiempo real (WebSockets)
-- [ ] Multi-sucursal
-- [ ] Métricas de IA/predicciones
-
-### Conocimientos Adquiridos
-- Next.js 16 con App Router
-- Prisma 6 ORM
-- JWT Authentication
-- TypeScript patterns
-- Validaciones en capas
-- REST API design
-
----
-
-## Soporte
-
-Para reportar issues o sugerencias:
-1. Revisar console (F12)
-2. Revisar logs del servidor (`/tmp/server.log`)
-3. Ejecutar tests: `bash test-api.sh`
-
----
-
-**Versión**: 1.0.0
-**Fecha**: 17 de marzo de 2026
-**Status**: 🟢 En Producción
+- Version documento: 1.2.0
+- Fecha: 19-03-2026
+- Estado: vigente con codigo actual del repositorio

@@ -11,7 +11,7 @@ export interface ValidationResult {
 }
 
 /**
- * Validador genérico seguidor del patrón de composición
+ * Validador generico seguidor del patron de composicion
  */
 export class FormValidator {
   private errors: ValidationError[] = []
@@ -29,7 +29,7 @@ export class FormValidator {
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(String(value))) {
-      this.errors.push({ field: fieldName, message: 'Email inválido' })
+      this.errors.push({ field: fieldName, message: 'Email invalido' })
     }
     return this
   }
@@ -37,14 +37,14 @@ export class FormValidator {
   // Password validation
   password(value: unknown, fieldName = 'password', minLength = 6): this {
     if (!value) {
-      this.errors.push({ field: fieldName, message: 'La contraseña es requerida' })
+      this.errors.push({ field: fieldName, message: 'La contrasena es requerida' })
       return this
     }
 
     if (String(value).length < minLength) {
       this.errors.push({
         field: fieldName,
-        message: `La contraseña debe tener al menos ${minLength} caracteres`,
+        message: `La contrasena debe tener al menos ${minLength} caracteres`,
       })
     }
     return this
@@ -82,7 +82,7 @@ export class FormValidator {
 
     const numValue = Number(value)
     if (isNaN(numValue)) {
-      this.errors.push({ field: fieldName, message: `${fieldName} debe ser un número` })
+      this.errors.push({ field: fieldName, message: `${fieldName} debe ser un numero` })
       return this
     }
 
@@ -140,7 +140,7 @@ export class FormValidator {
 }
 
 /**
- * Validaciones específicas del dominio
+ * Validaciones especificas del dominio
  */
 interface ComandaData {
   categoriaId?: unknown
@@ -173,13 +173,13 @@ export class DomainValidator {
       .custom(
         ['cliente', 'chica'].includes(String(data.tipoConsumo ?? '')),
         'tipoConsumo',
-        'Tipo de consumo inválido'
+        'Tipo de consumo invalido'
       )
       .required(data.medioPago, 'medioPago')
       .custom(
         ['efectivo', 'transferencia', 'debito', 'credito'].includes(String(data.medioPago ?? '')),
         'medioPago',
-        'Medio de pago inválido'
+        'Medio de pago invalido'
       )
       .number(
         data.precioBase,
@@ -196,7 +196,7 @@ export class DomainValidator {
     return validator.getResult()
   }
 
-  // Validar categoría
+  // Validar categoria
   static validateCategoria(data: CategoriaData): ValidationResult {
     const validator = new FormValidator()
 
@@ -222,7 +222,7 @@ export class DomainValidator {
     return validator.getResult()
   }
 
-  // Validar configuración
+  // Validar configuracion
   static validateConfig(data: any): ValidationResult {
     const validator = new FormValidator()
 
@@ -240,6 +240,10 @@ export class DomainValidator {
 
     if (data.minValor150k !== undefined) {
       validator.number(data.minValor150k, 'minValor150k', 1, 9999999)
+    }
+
+    if (data.comisionAcompananteBotella !== undefined) {
+      validator.number(data.comisionAcompananteBotella, 'comisionAcompananteBotella', 0, 9999999)
     }
 
     return validator.getResult()

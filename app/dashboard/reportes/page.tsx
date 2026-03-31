@@ -158,7 +158,7 @@ export default function Reportes() {
     <DashboardLayout>
       <div>
         <PageHeader
-          title="Reportes y Estadísticas"
+          title="Reportes y Estadisticas"
           description="Consulta el rendimiento del negocio por rango operativo y exporta resultados." 
         />
 
@@ -194,7 +194,7 @@ export default function Reportes() {
             <h3 className="mb-4 text-xl font-bold">Resumen del Periodo</h3>
             <div className="space-y-3">
               <p className="text-sm text-gray-400">
-                Período: {reportData?.periodo || '-'}
+                Periodo: {reportData?.periodo || '-'}
               </p>
               <div className="pt-3 border-t border-gray-700">
                 <p className="mb-2"><span className="text-gray-400">Tipo:</span> <span className="capitalize">{tipoReporte}</span></p>

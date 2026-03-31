@@ -42,7 +42,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const { nombre, activa } = data as { nombre?: string; activa?: boolean }
     if (!nombre && activa === undefined) {
-      return NextResponse.json({ error: 'No se proporcionaron campos válidos' }, { status: 400 })
+      return NextResponse.json({ error: 'No se proporcionaron campos validos' }, { status: 400 })
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

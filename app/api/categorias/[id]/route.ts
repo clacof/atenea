@@ -86,7 +86,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const linked = await prisma.comanda.count({ where: { categoriaId: numericId } })
     if (linked > 0) {
       return NextResponse.json(
-        { error: `No se puede eliminar: hay ${linked} comanda(s) que usan esta categoría. Desactívala en su lugar.` },
+        { error: `No se puede eliminar: hay ${linked} comanda(s) que usan esta categoria. Desactivala en su lugar.` },
         { status: 409 },
       )
     }

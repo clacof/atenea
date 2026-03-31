@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const mes = searchParams.get('mes') // YYYY-MM para mensual
     const year = searchParams.get('year') // YYYY para anual
 
-    // Obtener configuración de ciclo
+    // Obtener configuracion de ciclo
     const configCiclo = await prisma.configGeneral.findFirst({
       where: { clave: 'HORA_INICIO_CICLO' },
     })
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     let endDate: Date
     let periodLabel: string
 
-    // Determinar rango de fechas según tipo de reporte
+    // Determinar rango de fechas segun tipo de reporte
     if (tipo === 'diario') {
       const targetDate = fecha ? new Date(fecha) : new Date()
       const cycle = getCycleForDate(targetDate, startHour)
@@ -44,9 +44,9 @@ export async function GET(request: NextRequest) {
       const targetYear = year ? parseInt(year) : new Date().getFullYear()
       startDate = new Date(targetYear, 0, 1)
       endDate = new Date(targetYear, 11, 31, 23, 59, 59)
-      periodLabel = `Año ${targetYear}`
+      periodLabel = `Ano ${targetYear}`
     } else {
-      return NextResponse.json({ error: 'Tipo de reporte inválido' }, { status: 400 })
+      return NextResponse.json({ error: 'Tipo de reporte invalido' }, { status: 400 })
     }
 
     // Obtener comandas en el rango
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       include: { categoria: true, chica1: true, chica2: true },
     })
 
-    // Calcular estadísticas
+    // Calcular estadisticas
     const totalVentas = comandas.reduce((sum, c) => sum + c.precioFinal, 0)
     const totalComisiones = comandas.reduce((sum, c) => sum + c.comisionTotal, 0)
     const totalComandas = comandas.length
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
       .filter(c => c.tipoConsumo === 'chica')
       .reduce((sum, c) => sum + c.precioFinal, 0)
 
-    // Por categoría
+    // Por categoria
     const porCategoria: Record<string, any> = {}
     comandas.forEach(cmd => {
       if (!porCategoria[cmd.categoria.nombre]) {

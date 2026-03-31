@@ -126,7 +126,7 @@ export default function Chicas() {
   }
 
   const handleDelete = async (chicaId: number) => {
-    if (!confirm('¿Deseas eliminar esta chica? Quedará inactiva.')) {
+    if (!confirm('Deseas eliminar esta chica? Quedara inactiva.')) {
       return
     }
 
@@ -187,7 +187,7 @@ export default function Chicas() {
       <div>
         <PageHeader
           title="Chicas"
-          description="Administra el catálogo de chicas activas e inactivas."
+          description="Administra el catalogo de chicas activas e inactivas."
           actions={<Button onClick={() => setShowModal(true)}>+ Agregar Chica</Button>}
         />
 

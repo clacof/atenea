@@ -10,15 +10,15 @@ export interface ReportCycle {
 
 /**
  * Obtiene el ciclo de reporte para una fecha dada
- * Ciclo: 10 PM del día anterior a 10 AM del día actual
- * Por ejemplo: viernes 10 PM - sábado 10 AM
+ * Ciclo: 10 PM del dia anterior a 10 AM del dia actual
+ * Por ejemplo: viernes 10 PM - sabado 10 AM
  */
 export function getCycleForDate(date: Date, startHour: number = 22, startMinute: number = 0): ReportCycle {
   const d = new Date(date)
   
-  // Si es antes de las 10 AM, el ciclo empezó el día anterior
+  // Si es antes de las 10 AM, el ciclo empezo el dia anterior
   if (d.getHours() < startHour || (d.getHours() === startHour && d.getMinutes() < startMinute)) {
-    // Ciclo comenzó ayer a las 10 PM
+    // Ciclo comenzo ayer a las 10 PM
     const startDate = new Date(d)
     startDate.setDate(startDate.getDate() - 1)
     startDate.setHours(startHour, startMinute, 0, 0)
@@ -35,7 +35,7 @@ export function getCycleForDate(date: Date, startHour: number = 22, startMinute:
       label: `${dayName} 10 PM - ${dayName2} 10 AM`,
     }
   } else {
-    // Ciclo comenzó hoy a las 10 PM
+    // Ciclo comenzo hoy a las 10 PM
     const startDate = new Date(d)
     startDate.setHours(startHour, startMinute, 0, 0)
 
@@ -75,7 +75,7 @@ export function getCyclesForMonth(year: number, month: number, startHour: number
 }
 
 /**
- * Obtiene ciclos para un año
+ * Obtiene ciclos para un ano
  */
 export function getCyclesForYear(year: number, startHour: number = 22): ReportCycle[] {
   const cycles: ReportCycle[] = []

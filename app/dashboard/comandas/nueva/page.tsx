@@ -1,71 +1,120 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '../../../../components/DashboardLayout'
 import FormError from '../../../../components/FormError'
 import { DomainValidator } from '../../../../lib/validations'
 import { getAuthHeaders } from '../../../../lib/client-auth'
+import { formatCurrency } from '../../../../lib/formatters'
 
 interface Categoria {
   id: number
   nombre: string
-  precioCliente: number
-  precioChica: number
+  tipo: 'trago' | 'botella'
+  isAfterhour: boolean
+  precioCliente?: number | null
+  precioChica?: number | null
+  precio?: number | null
 }
 
-interface Chica {
+interface ChicaDisponibilidad {
   id: number
   nombre: string
+  disponible: boolean
 }
 
-export default function NuevaComanda() {
+interface ClienteActivo {
+  clienteNombre: string
+  count: number
+  subtotal: number
+}
+
+interface TurnoData {
+  fecha: string
+  clientesActivos: ClienteActivo[]
+  chicas: ChicaDisponibilidad[]
+  siguienteNumeroCliente: number
+  config: {
+    maxChicasBottella: number
+    comisionAcompananteBotella: number
+  }
+}
+
+function NuevaComandaContent() {
   const [categorias, setCategorias] = useState<Categoria[]>([])
-  const [chicas, setChicas] = useState<Chica[]>([])
+  const [turnoData, setTurnoData] = useState<TurnoData | null>(null)
+  const [modoCliente, setModoCliente] = useState<'nuevo' | 'existente'>('nuevo')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [precioInfo, setPrecioInfo] = useState({ precioBase: 0, precioFinal: 0, comision: 0 })
+  const [precioInfo, setPrecioInfo] = useState({
+    precioBase: 0,
+    precioFinal: 0,
+    comision: 0,
+    deltaBotella: 0,
+  })
   const [formData, setFormData] = useState({
     categoriaId: '',
     tipoConsumo: 'cliente',
     clienteNombre: '',
+    clienteExistente: '',
     chica1Id: '',
     chica2Id: '',
+    chicasAdicionalesBotella: '0',
     descuentoPorcentaje: '',
     descuentoMonto: '',
     cortesia: false,
     medioPago: 'efectivo',
   })
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const loadData = async () => {
+    const [cats, turno] = await Promise.all([
+      fetch('/api/categorias', { headers: getAuthHeaders() }).then((r) => r.json()),
+      fetch('/api/comandas/turno-activo', { headers: getAuthHeaders() }).then((r) => r.json()),
+    ])
+    setCategorias(Array.isArray(cats) ? cats : [])
+    setTurnoData(turno)
+    return turno as TurnoData
+  }
 
   useEffect(() => {
-    // Cargar categorias
-    fetch('/api/categorias', {
-      headers: getAuthHeaders(),
-    })
-      .then(r => r.json())
-      .then(data => setCategorias(Array.isArray(data) ? data : []))
-      .catch(err => console.error('Error cargando categorias:', err))
+    loadData()
+      .then((turno) => {
+        const clienteParam = searchParams.get('cliente')
+        if (clienteParam) {
+          setModoCliente('existente')
+          setFormData((prev) => ({
+            ...prev,
+            clienteExistente: clienteParam,
+            clienteNombre: clienteParam,
+          }))
+          return
+        }
 
-    // Cargar chicas
-    fetch('/api/chicas', {
-      headers: getAuthHeaders(),
-    })
-      .then(r => r.json())
-      .then(data => setChicas(Array.isArray(data) ? data : []))
-      .catch(err => console.error('Error cargando chicas:', err))
-  }, [])
+        setFormData((prev) => ({
+          ...prev,
+          clienteNombre: `C${turno.siguienteNumeroCliente}`,
+        }))
+      })
+      .catch((err) => {
+        console.error('Error cargando datos de nueva comanda:', err)
+        setError('No se pudo cargar la informacion del turno')
+      })
+  }, [searchParams])
 
-  // Calcular precios cuando cambien los valores
   useEffect(() => {
-    const categoria = categorias.find(c => c.id === Number(formData.categoriaId))
+    const categoria = categorias.find((c) => c.id === Number(formData.categoriaId))
     if (!categoria) {
-      setPrecioInfo({ precioBase: 0, precioFinal: 0, comision: 0 })
+      setPrecioInfo({ precioBase: 0, precioFinal: 0, comision: 0, deltaBotella: 0 })
       return
     }
 
-    let precioBase = formData.tipoConsumo === 'cliente' ? categoria.precioCliente : categoria.precioChica
+    const baseCliente = categoria.precioCliente ?? categoria.precio ?? 0
+    const baseChica = categoria.precioChica ?? 0
+    const precioBase = formData.tipoConsumo === 'cliente' ? baseCliente : baseChica
     let precioFinal = precioBase
 
     if (formData.cortesia) {
@@ -80,22 +129,57 @@ export default function NuevaComanda() {
     }
 
     let comision = 0
-    if (formData.tipoConsumo === 'chica') {
-      if (precioBase >= 150000) {
-        comision = precioFinal * 0.3
-      } else {
-        comision = precioFinal * 0.4
+    let deltaBotella = 0
+    const isAfterhour = categoria.isAfterhour
+
+    if (!isAfterhour) {
+      if (formData.tipoConsumo === 'chica') {
+        const rate = precioBase >= 150000 ? 0.3 : 0.4
+        comision = Math.round(precioFinal * rate)
+      }
+
+      if (categoria.tipo === 'botella' && formData.tipoConsumo === 'cliente' && !formData.cortesia) {
+        const adicionales = Number(formData.chicasAdicionalesBotella || '0')
+        const comisionPorChica = turnoData?.config.comisionAcompananteBotella ?? 5000
+        deltaBotella = adicionales * comisionPorChica
+        comision += deltaBotella
+        precioFinal += deltaBotella
       }
     }
 
-    setPrecioInfo({ precioBase, precioFinal, comision })
+    setPrecioInfo({
+      precioBase: Math.max(0, Math.round(precioBase)),
+      precioFinal: Math.max(0, Math.round(precioFinal)),
+      comision: Math.max(0, Math.round(comision)),
+      deltaBotella,
+    })
   }, [formData, categorias])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
+    }))
+  }
+
+  const handleModoCliente = (modo: 'nuevo' | 'existente') => {
+    setModoCliente(modo)
+    setError('')
+
+    if (modo === 'nuevo') {
+      setFormData((prev) => ({
+        ...prev,
+        clienteExistente: '',
+        clienteNombre: `C${turnoData?.siguienteNumeroCliente ?? 1}`,
+      }))
+      return
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      clienteExistente: '',
+      clienteNombre: '',
     }))
   }
 
@@ -104,7 +188,14 @@ export default function NuevaComanda() {
     setError('')
     setFieldErrors({})
 
-    // Validar usando DomainValidator
+    const clienteSeleccionado =
+      modoCliente === 'existente' ? formData.clienteExistente : formData.clienteNombre
+
+    if (!clienteSeleccionado || !/^C\d+$/i.test(clienteSeleccionado.trim())) {
+      setError('Selecciona o define un cliente con formato C1, C2, C3...')
+      return
+    }
+
     const validationData = {
       categoriaId: formData.categoriaId ? Number(formData.categoriaId) : null,
       tipoConsumo: formData.tipoConsumo,
@@ -127,13 +218,17 @@ export default function NuevaComanda() {
 
     try {
       setLoading(true)
+
       const payload = {
         categoriaId: Number(formData.categoriaId),
         tipoConsumo: formData.tipoConsumo,
-        clienteNombre: formData.clienteNombre.trim() || null,
+        clienteNombre: clienteSeleccionado.trim().toUpperCase(),
         chica1Id: formData.chica1Id ? Number(formData.chica1Id) : null,
         chica2Id: formData.chica2Id ? Number(formData.chica2Id) : null,
-        descuentoPorcentaje: formData.descuentoPorcentaje ? Number(formData.descuentoPorcentaje) : null,
+        chicasAdicionalesBotella: Number(formData.chicasAdicionalesBotella || '0'),
+        descuentoPorcentaje: formData.descuentoPorcentaje
+          ? Number(formData.descuentoPorcentaje)
+          : null,
         descuentoMonto: formData.descuentoMonto ? Number(formData.descuentoMonto) : null,
         cortesia: formData.cortesia,
         medioPago: formData.medioPago,
@@ -154,7 +249,7 @@ export default function NuevaComanda() {
         return
       }
 
-      router.push('/dashboard/comandas')
+      router.push('/dashboard/turno')
     } catch (err) {
       setError('Error al crear comanda: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
@@ -162,41 +257,85 @@ export default function NuevaComanda() {
     }
   }
 
+  const clienteActivo = turnoData?.clientesActivos.find(
+    (c) => c.clienteNombre === formData.clienteExistente,
+  )
+  const subtotalAnterior = clienteActivo?.subtotal ?? 0
+  const totalPagar = subtotalAnterior + precioInfo.precioFinal
+  const disponibles = (turnoData?.chicas ?? []).filter((c) => c.disponible)
+  const maxAcompanantesBotella = Math.min(
+    disponibles.length,
+    turnoData?.config.maxChicasBottella ?? disponibles.length,
+  )
 
   return (
     <DashboardLayout>
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">Nueva Comanda</h1>
-        
+
         {error && (
-          <div className="bg-red-900 text-red-100 p-4 rounded mb-6 border border-red-700">
-            {error}
-          </div>
+          <div className="bg-red-900 text-red-100 p-4 rounded mb-6 border border-red-700">{error}</div>
         )}
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="bg-red-900 text-red-200 p-4 rounded">
-              {error}
-            </div>
-          )}
 
-          {/* Cliente */}
-          <div className="bg-gray-800 p-6 rounded-lg">
-            <label className="block text-sm font-medium mb-2">Nombre del Cliente</label>
-            <input
-              type="text"
-              name="clienteNombre"
-              value={formData.clienteNombre}
-              onChange={handleChange}
-              placeholder="Ej: Mesa 3, Juan, VIP..."
-              maxLength={100}
-              className="w-full p-2 bg-gray-700 text-white rounded placeholder-gray-500"
-            />
-            <p className="mt-1 text-xs text-gray-400">Opcional — sirve para agrupar comandas del mismo cliente</p>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="bg-gray-800 p-6 rounded-lg space-y-4">
+            <p className="text-sm font-semibold">Es Nuevo Cliente o Cliente Existente?</p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={modoCliente === 'nuevo'}
+                  onChange={() => handleModoCliente('nuevo')}
+                  className="accent-purple-500"
+                />
+                Nuevo Cliente
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={modoCliente === 'existente'}
+                  onChange={() => handleModoCliente('existente')}
+                  className="accent-purple-500"
+                />
+                Cliente Existente
+              </label>
+            </div>
+
+            {modoCliente === 'nuevo' ? (
+              <div>
+                <label className="block text-sm mb-2">Cliente (correlativo del dia)</label>
+                <input
+                  type="text"
+                  name="clienteNombre"
+                  value={formData.clienteNombre}
+                  onChange={handleChange}
+                  className="w-full p-2 bg-gray-700 text-white rounded"
+                />
+                <p className="mt-1 text-xs text-gray-400">Formato esperado: C1, C2, C3...</p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm mb-2">Selecciona cliente registrado</label>
+                <select
+                  name="clienteExistente"
+                  value={formData.clienteExistente}
+                  onChange={(e) => {
+                    handleChange(e)
+                    setFormData((prev) => ({ ...prev, clienteNombre: e.target.value }))
+                  }}
+                  className="w-full p-2 bg-gray-700 text-white rounded"
+                >
+                  <option value="">Seleccionar cliente</option>
+                  {(turnoData?.clientesActivos ?? []).map((cliente) => (
+                    <option key={cliente.clienteNombre} value={cliente.clienteNombre}>
+                      {cliente.clienteNombre} - {formatCurrency(cliente.subtotal)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
-          {/* Categoria */}
           <div className="bg-gray-800 p-6 rounded-lg">
             <label className="block text-sm font-medium mb-2">Categoria *</label>
             <select
@@ -213,14 +352,15 @@ export default function NuevaComanda() {
               }`}
             >
               <option value="">Seleccionar categoria</option>
-              {categorias.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+              {categorias.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.nombre}
+                </option>
               ))}
             </select>
             <FormError message={fieldErrors.categoriaId} />
           </div>
 
-          {/* Tipo de Consumo */}
           <div className="bg-gray-800 p-6 rounded-lg">
             <label className="block text-sm font-medium mb-2">Tipo de Consumo</label>
             <div className="flex gap-4">
@@ -249,9 +389,11 @@ export default function NuevaComanda() {
             </div>
           </div>
 
-          {/* Chicas */}
           {formData.tipoConsumo === 'chica' && (
             <div className="bg-gray-800 p-6 rounded-lg space-y-4">
+              <p className="text-xs text-gray-400">
+                Disponibles ahora: {disponibles.length} de {(turnoData?.chicas ?? []).length}
+              </p>
               <div>
                 <label className="block text-sm font-medium mb-2">Chica 1 *</label>
                 <select
@@ -268,8 +410,10 @@ export default function NuevaComanda() {
                   }`}
                 >
                   <option value="">Seleccionar chica</option>
-                  {chicas.map(chica => (
-                    <option key={chica.id} value={chica.id}>{chica.nombre}</option>
+                  {disponibles.map((chica) => (
+                    <option key={chica.id} value={chica.id}>
+                      {chica.nombre}
+                    </option>
                   ))}
                 </select>
                 <FormError message={fieldErrors.chica1Id} />
@@ -284,15 +428,47 @@ export default function NuevaComanda() {
                   className="w-full p-2 bg-gray-700 text-white rounded"
                 >
                   <option value="">Ninguna</option>
-                  {chicas.map(chica => (
-                    <option key={chica.id} value={chica.id}>{chica.nombre}</option>
-                  ))}
+                  {disponibles
+                    .filter((chica) => String(chica.id) !== formData.chica1Id)
+                    .map((chica) => (
+                      <option key={chica.id} value={chica.id}>
+                        {chica.nombre}
+                      </option>
+                    ))}
                 </select>
               </div>
             </div>
           )}
 
-          {/* Descuentos */}
+          {(() => {
+            const categoriaSeleccionada = categorias.find((c) => c.id === Number(formData.categoriaId))
+            const mostrarDelta =
+              categoriaSeleccionada?.tipo === 'botella' && formData.tipoConsumo === 'cliente'
+
+            if (!mostrarDelta) return null
+
+            return (
+              <div className="bg-gray-800 p-6 rounded-lg">
+                <label className="block text-sm font-medium mb-2">
+                  Chicas adicionales acompanando (delta comision)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max={String(maxAcompanantesBotella)}
+                  name="chicasAdicionalesBotella"
+                  value={formData.chicasAdicionalesBotella}
+                  onChange={handleChange}
+                  className="w-full p-2 bg-gray-700 text-white rounded"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Maximo permitido: {maxAcompanantesBotella} · Comision por acompanante:{' '}
+                  {formatCurrency(turnoData?.config.comisionAcompananteBotella ?? 5000)}
+                </p>
+              </div>
+            )
+          })()}
+
           <div className="bg-gray-800 p-6 rounded-lg grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">Descuento %</label>
@@ -319,7 +495,6 @@ export default function NuevaComanda() {
             </div>
           </div>
 
-          {/* Cortesía y Pago */}
           <div className="bg-gray-800 p-6 rounded-lg space-y-4">
             <label className="flex items-center">
               <input
@@ -356,46 +531,77 @@ export default function NuevaComanda() {
             </div>
           </div>
 
-          {/* Preview de totales */}
           <div className="bg-purple-900 p-6 rounded-lg border border-purple-700">
             <h3 className="font-bold mb-4 text-lg">Resumen</h3>
+            <div className="space-y-2 text-sm mb-4">
+              <div className="flex justify-between text-gray-200">
+                <span>Subtotal anterior</span>
+                <span>{formatCurrency(subtotalAnterior)}</span>
+              </div>
+              <div className="flex justify-between text-gray-200">
+                <span>Nuevos servicios</span>
+                <span>{formatCurrency(precioInfo.precioFinal)}</span>
+              </div>
+              <div className="flex justify-between text-white font-semibold border-t border-purple-700 pt-2">
+                <span>Total a pagar</span>
+                <span>{formatCurrency(totalPagar)}</span>
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
                 <p className="text-gray-300">Precio Base</p>
-                <p className="text-xl font-bold text-blue-400">${precioInfo.precioBase.toLocaleString()}</p>
+                <p className="text-xl font-bold text-blue-400">{formatCurrency(precioInfo.precioBase)}</p>
               </div>
               <div>
                 <p className="text-gray-300">Precio Final</p>
-                <p className="text-xl font-bold text-green-400">${precioInfo.precioFinal.toLocaleString()}</p>
+                <p className="text-xl font-bold text-green-400">{formatCurrency(precioInfo.precioFinal)}</p>
               </div>
-              {formData.tipoConsumo === 'chica' && (
-                <div>
-                  <p className="text-gray-300">Comisión</p>
-                  <p className="text-xl font-bold text-yellow-400">${Math.round(precioInfo.comision).toLocaleString()}</p>
-                </div>
-              )}
+              <div>
+                <p className="text-gray-300">Comision</p>
+                <p className="text-xl font-bold text-yellow-400">{formatCurrency(precioInfo.comision)}</p>
+              </div>
             </div>
+
+            {precioInfo.deltaBotella > 0 && (
+              <p className="text-xs mt-3 text-gray-300">
+                Delta botella aplicado por acompanantes: {formatCurrency(precioInfo.deltaBotella)}
+              </p>
+            )}
           </div>
 
-          {/* Botones */}
           <div className="flex gap-4">
             <button
               type="submit"
               disabled={loading || !formData.categoriaId}
               className="flex-1 bg-purple-600 hover:bg-purple-700 text-white p-3 rounded disabled:opacity-50 font-semibold"
             >
-              {loading ? 'Creando...' : 'Crear Comanda'}
+              {loading ? 'Creando...' : 'Anadir a Comanda'}
             </button>
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => router.push('/dashboard/turno')}
               className="flex-1 bg-gray-700 hover:bg-gray-600 text-white p-3 rounded"
             >
-              Cancelar
+              Volver al Turno
             </button>
           </div>
         </form>
       </div>
     </DashboardLayout>
+  )
+}
+
+export default function NuevaComanda() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className="py-16 text-center text-gray-400">Cargando...</div>
+        </DashboardLayout>
+      }
+    >
+      <NuevaComandaContent />
+    </Suspense>
   )
 }

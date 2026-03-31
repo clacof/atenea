@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       include: { categoria: true, chica1: true, chica2: true },
     })
 
-    // Estadísticas generales
+    // Estadisticas generales
     const totalVentas = comandasHoy.reduce((sum, c) => sum + c.precioFinal, 0)
     const totalComisiones = comandasHoy.reduce((sum, c) => sum + c.comisionTotal, 0)
     const totalComandas = comandasHoy.length
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       .filter(c => c.tipoConsumo === 'chica')
       .reduce((sum, c) => sum + c.precioFinal, 0)
 
-    // Por categoría
+    // Por categoria
     const porCategoria: Record<string, CategoryStats> = {}
     comandasHoy.forEach(cmd => {
       if (!porCategoria[cmd.categoria.nombre]) {

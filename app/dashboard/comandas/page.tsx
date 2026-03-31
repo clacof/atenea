@@ -87,7 +87,7 @@ export default function Comandas() {
     return comandas.filter(c => (c.clienteNombre ?? '').toLowerCase().includes(q))
   }, [comandas, filtroCliente])
 
-  // Agrupación por clienteNombre
+  // Agrupacion por clienteNombre
   const grupos = useMemo(() => {
     const map = new Map<string, { comandas: Comanda[]; total: number; comision: number }>()
     for (const c of comandasFiltradas) {
@@ -208,7 +208,7 @@ export default function Comandas() {
                 <div className="flex gap-4 text-sm text-gray-300">
                   <span>{grupo.comandas.length} comanda{grupo.comandas.length !== 1 ? 's' : ''}</span>
                   <span>Total: <span className="text-green-400 font-medium">{formatCurrency(grupo.total)}</span></span>
-                  <span>Comisión: <span className="text-blue-400 font-medium">{formatCurrency(grupo.comision)}</span></span>
+                  <span>Comision: <span className="text-blue-400 font-medium">{formatCurrency(grupo.comision)}</span></span>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -229,7 +229,7 @@ export default function Comandas() {
           data={comandasFiltradas}
           getRowKey={(comanda) => comanda.id}
           emptyTitle="No hay comandas registradas"
-          emptyDescription="Las comandas creadas aparecerán en este tablero."
+          emptyDescription="Las comandas creadas apareceran en este tablero."
         />
       )}
     </DashboardLayout>

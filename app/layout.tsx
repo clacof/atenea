@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "ATENEA Night Club - Sistema Operativo",
-  description: "Sistema integral de gestión de comandas, caja y reportes para nightclub",
+  description: "Sistema integral de gestion de comandas, caja y reportes para nightclub",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

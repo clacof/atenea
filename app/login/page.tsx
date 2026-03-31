@@ -62,7 +62,7 @@ export default function Login() {
 
       if (!response.ok) {
         const data = await response.json()
-        setError(data.error || 'Error de autenticación')
+        setError(data.error || 'Error de autenticacion')
         return
       }
 
@@ -74,7 +74,7 @@ export default function Login() {
       else clearRememberedEmail()
       router.push('/dashboard')
     } catch (err) {
-      setError('Error de conexión con el servidor')
+      setError('Error de conexion con el servidor')
     } finally {
       setLoading(false)
     }
@@ -105,7 +105,7 @@ export default function Login() {
             <FormError message={fieldErrors.email} />
           </div>
           <div className="mb-4">
-            <label className="block text-gray-300 mb-2">Contraseña</label>
+            <label className="block text-gray-300 mb-2">Contrasena</label>
             <input
               type="password"
               name="login-password"
@@ -138,7 +138,7 @@ export default function Login() {
             disabled={loading}
             className="w-full bg-purple-600 hover:bg-purple-700 text-white p-2 rounded disabled:opacity-50"
           >
-            {loading ? 'Iniciando...' : 'Iniciar Sesión'}
+            {loading ? 'Iniciando...' : 'Iniciar Sesion'}
           </button>
         </form>
       </div>

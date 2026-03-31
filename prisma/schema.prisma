@@ -53,6 +53,7 @@ model Categoria {
   id            Int            @id @default(autoincrement())
   nombre        String
   tipo          TipoCategoria  @default(trago)
+  isAfterhour   Boolean        @default(false)
   precioCliente Int?           // Para tragos
   precioChica   Int?           // Para tragos
   comisionChica Int?           // Para tragos

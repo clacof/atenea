@@ -117,7 +117,7 @@ export default function Dashboard() {
         data={comandas.slice(0, 5)}
         getRowKey={(comanda) => comanda.id}
         emptyTitle="No hay comandas recientes"
-        emptyDescription="Cuando se registren ventas, aparecerán aquí."
+        emptyDescription="Cuando se registren ventas, apareceran aqui."
       />
     </DashboardLayout>
   )

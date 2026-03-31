@@ -1,5 +1,5 @@
 /**
- * Utilidades para exportación de reportes a PDF y Excel
+ * Utilidades para exportacion de reportes a PDF y Excel
  */
 
 export interface ExportData {
@@ -22,7 +22,7 @@ export interface ExportData {
  */
 export function generateExcel(data: ExportData): Blob {
   let csv = '\uFEFFATENEA Night Club - Reporte\n'
-  csv += `Período: ${data.periodo}\n`
+  csv += `Periodo: ${data.periodo}\n`
   csv += `Generado: ${new Date().toLocaleString('es-ES')}\n\n`
 
   // Resumen
@@ -35,7 +35,7 @@ export function generateExcel(data: ExportData): Blob {
   csv += `Promedio por Comanda,${data.resumen.promedioPorComanda}\n\n`
 
   // Por Medio de Pago
-  csv += 'DISTRIBUCIÓN POR MEDIO DE PAGO\n'
+  csv += 'DISTRIBUCION POR MEDIO DE PAGO\n'
   csv += 'Medio,Total,Porcentaje\n'
   data.porMedioPago.forEach(item => {
     csv += `"${item.medioPago.toUpperCase()}",${item.total},"${item.porcentaje.toFixed(2)}%"\n`
@@ -45,17 +45,17 @@ export function generateExcel(data: ExportData): Blob {
   // Por Chica
   if (data.porChica && data.porChica.length > 0) {
     csv += 'TOTALES POR CHICA\n'
-    csv += 'Chica,Cantidad,Comisión,Ventas\n'
+    csv += 'Chica,Cantidad,Comision,Ventas\n'
     data.porChica.forEach(item => {
       csv += `"${item.nombre}",${item.cantidad},${item.comision},${item.ventas}\n`
     })
     csv += '\n'
   }
 
-  // Por Categoría
+  // Por Categoria
   if (data.porCategoria && data.porCategoria.length > 0) {
-    csv += 'TOTALES POR CATEGORÍA\n'
-    csv += 'Categoría,Cantidad,Total,Comisión\n'
+    csv += 'TOTALES POR CATEGORIA\n'
+    csv += 'Categoria,Cantidad,Total,Comision\n'
     data.porCategoria.forEach(item => {
       csv += `"${item.nombre}",${item.cantidad},${item.total},${item.comision}\n`
     })

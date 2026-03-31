@@ -9,8 +9,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const { searchParams } = new URL(request.url)
+    const includeInactive =
+      searchParams.get('includeInactive') === '1' ||
+      searchParams.get('includeInactive') === 'true'
+
     const categorias = await prisma.categoria.findMany({
-      where: { activa: true },
+      where: includeInactive ? undefined : { activa: true },
       orderBy: [{ tipo: 'asc' }, { nombre: 'asc' }],
     })
 
@@ -31,12 +36,12 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
     
-    // Validación básica
+    // Validacion basica
     if (!data.nombre || !data.tipo) {
       return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 })
     }
 
-    // Validar según el tipo
+    // Validar segun el tipo
     if (data.tipo === 'trago') {
       if (!data.precioCliente || !data.precioChica || data.comisionChica === undefined) {
         return NextResponse.json({ error: 'Para tragos se requieren precioCliente, precioChica y comisionChica' }, { status: 400 })
@@ -51,6 +56,7 @@ export async function POST(request: NextRequest) {
       data: {
         nombre: data.nombre,
         tipo: data.tipo,
+        isAfterhour: Boolean(data.isAfterhour),
         precioCliente: data.precioCliente || null,
         precioChica: data.precioChica || null,
         comisionChica: data.comisionChica || null,

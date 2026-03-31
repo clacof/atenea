@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Button from '../../../components/atoms/Button'
 import Input from '../../../components/atoms/Input'
 import LoadingState from '../../../components/atoms/LoadingState'
@@ -20,9 +21,11 @@ interface ConfigData {
   minValor150k: number
   comisionPremiumFija: number
   comisionNormalFija: number
+  comisionAcompananteBotella: number
 }
 
 export default function Configuracion() {
+  const router = useRouter()
   const [config, setConfig] = useState<ConfigData>({
     horaCambioAfter: '04:00',
     maxChicasBottella: 2,
@@ -31,13 +34,13 @@ export default function Configuracion() {
     minValor150k: 150000,
     comisionPremiumFija: 10000,
     comisionNormalFija: 5000,
+    comisionAcompananteBotella: 5000,
   })
 
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [showUsersModal, setShowUsersModal] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [showLogsModal, setShowLogsModal] = useState(false)
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
@@ -67,7 +70,7 @@ export default function Configuracion() {
   const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault()
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('Las contraseñas no coinciden')
+      alert('Las contrasenas no coinciden')
       return
     }
       alert('✓ Contrasena actualizada correctamente')
@@ -185,6 +188,15 @@ export default function Configuracion() {
                   hasError={Boolean(fieldErrors.minValor150k)}
                   />
               </FormField>
+              <FormField label="Comision por Acompanante de Botella" error={fieldErrors.comisionAcompananteBotella}>
+                <Input
+                    type="number"
+                    name="comisionAcompananteBotella"
+                    value={config.comisionAcompananteBotella}
+                    onChange={handleChange}
+                  hasError={Boolean(fieldErrors.comisionAcompananteBotella)}
+                  />
+              </FormField>
             </ConfigSection>
 
             <ConfigSection title="Comisiones por Tipo">
@@ -222,7 +234,7 @@ export default function Configuracion() {
           <h3 className="text-lg font-semibold mb-4">Otras Opciones</h3>
           <div className="space-y-3">
             <Button
-              onClick={() => setShowUsersModal(true)}
+              onClick={() => router.push('/dashboard/usuarios')}
               variant="ghost"
               fullWidth
               className="justify-start text-left"
@@ -235,7 +247,7 @@ export default function Configuracion() {
               fullWidth
               className="justify-start text-left"
             >
-              🔐 Cambiar Contraseña
+              🔐 Cambiar Contrasena
             </Button>
             <Button
               onClick={() => setShowLogsModal(true)}
@@ -247,7 +259,7 @@ export default function Configuracion() {
             </Button>
             <Button
               onClick={() => {
-                if (confirm('¿Deseas crear un backup del sistema?')) {
+                if (confirm('Deseas crear un backup del sistema?')) {
                   alert('✓ Backup creado: backup_' + new Date().toISOString().split('T')[0] + '.zip')
                 }
               }}
@@ -260,28 +272,6 @@ export default function Configuracion() {
           </div>
         </ConfigSection>
 
-        {/* Users Management Modal */}
-        <Modal
-          isOpen={showUsersModal}
-          title="Gestion de Usuarios"
-          onClose={() => setShowUsersModal(false)}
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-gray-300 mb-4">Usuarios del Sistema</p>
-            <div className="bg-gray-700 p-3 rounded">
-              <p className="font-medium">admin@atenea.com</p>
-              <p className="text-sm text-gray-400">Administrador - Activo</p>
-            </div>
-            <div className="bg-gray-700 p-3 rounded">
-              <p className="font-medium">cajera@atenea.com</p>
-              <p className="text-sm text-gray-400">Cajera - Activo</p>
-            </div>
-            <Button fullWidth className="mt-4">
-              + Agregar Usuario
-            </Button>
-          </div>
-        </Modal>
-
         {/* Change Password Modal */}
         <Modal
           isOpen={showPasswordModal}
@@ -290,7 +280,7 @@ export default function Configuracion() {
         >
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Contraseña Actual</label>
+              <label className="block text-sm font-medium mb-2">Contrasena Actual</label>
               <Input
                 type="password"
                 value={passwordData.currentPassword}
@@ -298,7 +288,7 @@ export default function Configuracion() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Nueva Contraseña</label>
+              <label className="block text-sm font-medium mb-2">Nueva Contrasena</label>
               <Input
                 type="password"
                 value={passwordData.newPassword}
@@ -306,7 +296,7 @@ export default function Configuracion() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Confirmar Contraseña</label>
+              <label className="block text-sm font-medium mb-2">Confirmar Contrasena</label>
               <Input
                 type="password"
                 value={passwordData.confirmPassword}
@@ -334,25 +324,25 @@ export default function Configuracion() {
         {/* Logs Modal */}
         <Modal
           isOpen={showLogsModal}
-          title="Logs de Auditoría"
+          title="Logs de Auditoria"
           onClose={() => setShowLogsModal(false)}
         >
           <div className="space-y-2 max-h-64 overflow-y-auto">
             <div className="text-xs bg-gray-700 p-2 rounded">
               <p className="text-gray-400">[2024-01-15 22:45:30]</p>
-              <p>Usuario: admin@atenea.com - Acción: Crear Comanda #001</p>
+              <p>Usuario: admin@atenea.com - Accion: Crear Comanda #001</p>
             </div>
             <div className="text-xs bg-gray-700 p-2 rounded">
               <p className="text-gray-400">[2024-01-15 22:40:15]</p>
-              <p>Usuario: admin@atenea.com - Acción: Actualizar Configuración</p>
+              <p>Usuario: admin@atenea.com - Accion: Actualizar Configuracion</p>
             </div>
             <div className="text-xs bg-gray-700 p-2 rounded">
               <p className="text-gray-400">[2024-01-15 22:30:00]</p>
-              <p>Usuario: admin@atenea.com - Acción: Descargar Reporte Excel</p>
+              <p>Usuario: admin@atenea.com - Accion: Descargar Reporte Excel</p>
             </div>
             <div className="text-xs bg-gray-700 p-2 rounded">
               <p className="text-gray-400">[2024-01-15 22:15:45]</p>
-              <p>Usuario: admin@atenea.com - Acción: Iniciar Sesión</p>
+              <p>Usuario: admin@atenea.com - Accion: Iniciar Sesion</p>
             </div>
           </div>
         </Modal>

@@ -16,6 +16,7 @@ interface Categoria {
   precioCliente?: number | null
   precioChica?: number | null
   precio?: number | null
+  comisionChica?: number | null
   recargoCreditoCliente?: number | null
   recargoCreditoChica?: number | null
   soloTransferencia?: boolean
@@ -151,15 +152,17 @@ function NuevaComandaContent() {
 
     if (!isAfterhour) {
       if (formData.tipoConsumo === 'chica') {
-        const rate = precioBase >= 150000 ? 0.3 : 0.4
-        comision = Math.round(precioFinal * rate)
+        // Usar comisión de la categoría en lugar de porcentaje fijo
+        comision = Math.round(categoria.comisionChica ?? 0)
       }
 
       if (categoria.tipo === 'botella' && formData.tipoConsumo === 'cliente' && !formData.cortesia) {
         const adicionales = Number(formData.chicasAdicionalesBotella || '0')
         const comisionPorChica = turnoData?.config.comisionAcompananteBotella ?? 5000
-        deltaBotella = adicionales * comisionPorChica
-        comision += deltaBotella
+        
+        // Comisión por acompañante + comisión por botella (categoría.comisionChica)
+        deltaBotella = (adicionales * comisionPorChica) + (categoria.comisionChica ?? 0)
+        comision = deltaBotella
         precioFinal += deltaBotella
       }
     }

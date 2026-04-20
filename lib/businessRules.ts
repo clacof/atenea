@@ -10,6 +10,8 @@ export interface CommissionInput {
   isAfterhour?: boolean
   chicasAdicionalesBotella?: number | null
   comisionPorChicaBotella?: number | null
+  comisionChicaCategoria?: number | null
+  comisionBotella?: number | null
   cortesia?: boolean
   descuentoMonto?: number | null
   descuentoPorcentaje?: number | null
@@ -30,8 +32,8 @@ export interface CommissionResult {
 
 /**
  * Calcula precio final y comisiones de una comanda.
- *  - precioBase >= 150.000 → 30 % de comision
- *  - precioBase < 150.000  → 40 % de comision
+ *  - Para tragos (tipoConsumo='chica'): aplica comisionChicaCategoria
+ *  - Para botellas: suma comisión por chicasAdicionalesBotella + comisionBotella
  *  - Pago con credito agrega recargo configurable por categoria
  * Los montos intermedios se redondean para evitar centavos.
  */
@@ -43,6 +45,8 @@ export function calculateComision(input: CommissionInput): CommissionResult {
     isAfterhour = false,
     chicasAdicionalesBotella,
     comisionPorChicaBotella,
+    comisionChicaCategoria,
+    comisionBotella,
     cortesia = false,
     descuentoMonto,
     descuentoPorcentaje,
@@ -78,26 +82,35 @@ export function calculateComision(input: CommissionInput): CommissionResult {
   let comisionTotal = 0
   let comisionChica1 = 0
   let comisionChica2 = 0
+
   if (isAfterhour) {
     // Regla de negocio: afterhour no paga comision a chicas, es solo para la casa.
     return { precioFinal, comisionTotal: 0, comisionChica1: 0, comisionChica2: 0, recargoCredito }
   }
 
-  if (
-    categoriaTipo === 'botella' &&
-    tipoConsumo === 'cliente' &&
-    !cortesia &&
-    precioFinal > 0 &&
-    (chicasAdicionalesBotella ?? 0) > 0
-  ) {
-    const deltaComision = Math.round((chicasAdicionalesBotella ?? 0) * (comisionPorChicaBotella ?? 0))
+  // Logica de comisiones por categoria y tipo de consumo
+  if (categoriaTipo === 'botella' && tipoConsumo === 'cliente' && !cortesia && precioFinal > 0) {
+    // Botellas: agregar comisión por chicasAdicionalesBotella + comisionBotella
+    let deltaComision = 0
+
+    // Comisión por chicas adicionales acompañando la botella
+    if ((chicasAdicionalesBotella ?? 0) > 0) {
+      deltaComision += Math.round((chicasAdicionalesBotella ?? 0) * (comisionPorChicaBotella ?? 0))
+    }
+
+    // Comisión por botella
+    if (comisionBotella && comisionBotella > 0) {
+      deltaComision += comisionBotella
+    }
+
     precioFinal = Math.max(0, precioFinal + deltaComision)
     comisionTotal = deltaComision
   } else if (tipoConsumo === 'chica' && !cortesia && precioFinal > 0) {
-    const rate = precioBase >= 150_000 ? 0.3 : 0.4
-    comisionTotal = Math.round(precioFinal * rate)
+    // Tragos para chica: usar comisionChicaCategoria
+    comisionTotal = Math.round(comisionChicaCategoria ?? 0)
   }
 
+  // Distribuir comision entre dos chicas si corresponde
   if (comisionTotal > 0) {
     if (chica1Id && chica2Id) {
       comisionChica1 = Math.round(comisionTotal / 2)

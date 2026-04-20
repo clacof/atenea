@@ -219,6 +219,8 @@ export async function POST(request: NextRequest) {
         isAfterhour: categoria.isAfterhour,
         chicasAdicionalesBotella: Number(chicasAdicionalesBotella ?? 0),
         comisionPorChicaBotella: comisionAcompananteBotella,
+        comisionChicaCategoria: categoria.comisionChica ?? 0,
+        comisionBotella: categoria.tipo === 'botella' ? (categoria.comisionChica ?? 0) : null,
         cortesia: cortesia ?? false,
         descuentoMonto: descuentoMonto ?? null,
         descuentoPorcentaje: descuentoPorcentaje ?? null,

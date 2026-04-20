@@ -12,6 +12,7 @@ export interface CommissionInput {
   comisionPorChicaBotella?: number | null
   comisionChicaCategoria?: number | null
   comisionBotella?: number | null
+  cantidadChicas?: number // Cantidad TOTAL de chicas en la comanda
   cortesia?: boolean
   descuentoMonto?: number | null
   descuentoPorcentaje?: number | null
@@ -33,7 +34,7 @@ export interface CommissionResult {
 /**
  * Calcula precio final y comisiones de una comanda.
  *  - Para tragos (tipoConsumo='chica'): aplica comisionChicaCategoria
- *  - Para botellas: suma comisión por chicasAdicionalesBotella + comisionBotella
+ *  - Para botellas: la comisión de categoría se divide por la cantidad de chicas
  *  - Pago con credito agrega recargo configurable por categoria
  * Los montos intermedios se redondean para evitar centavos.
  */
@@ -47,6 +48,7 @@ export function calculateComision(input: CommissionInput): CommissionResult {
     comisionPorChicaBotella,
     comisionChicaCategoria,
     comisionBotella,
+    cantidadChicas = 1,
     cortesia = false,
     descuentoMonto,
     descuentoPorcentaje,
@@ -90,23 +92,11 @@ export function calculateComision(input: CommissionInput): CommissionResult {
 
   // Logica de comisiones por categoria y tipo de consumo
   if (categoriaTipo === 'botella' && tipoConsumo === 'cliente' && !cortesia && precioFinal > 0) {
-    // Botellas: agregar comisión por chicasAdicionalesBotella + comisionBotella
-    let deltaComision = 0
-
-    // Comisión por chicas adicionales acompañando la botella
-    if ((chicasAdicionalesBotella ?? 0) > 0) {
-      deltaComision += Math.round((chicasAdicionalesBotella ?? 0) * (comisionPorChicaBotella ?? 0))
-    }
-
-    // Comisión por botella
-    if (comisionBotella && comisionBotella > 0) {
-      deltaComision += comisionBotella
-    }
-
-    precioFinal = Math.max(0, precioFinal + deltaComision)
-    comisionTotal = deltaComision
+    // Botellas: La comisión de categoría se divide por cantidad de chicas
+    const comisionPorChica = Math.round((comisionBotella ?? comisionChicaCategoria ?? 0) / Math.max(1, cantidadChicas))
+    comisionTotal = comisionPorChica * Math.max(1, cantidadChicas)
   } else if (tipoConsumo === 'chica' && !cortesia && precioFinal > 0) {
-    // Tragos para chica: usar comisionChicaCategoria
+    // Tragos para chica: usar comisionChicaCategoria sin dividir
     comisionTotal = Math.round(comisionChicaCategoria ?? 0)
   }
 

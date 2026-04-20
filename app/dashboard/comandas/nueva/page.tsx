@@ -67,7 +67,6 @@ function NuevaComandaContent() {
     clienteExistente: '',
     chica1Id: '',
     chica2Id: '',
-    chicasAdicionalesBotella: '0',
     descuentoPorcentaje: '',
     descuentoMonto: '',
     cortesia: false,
@@ -150,19 +149,20 @@ function NuevaComandaContent() {
     let deltaBotella = 0
     const isAfterhour = categoria.isAfterhour
 
+    // Calcular cantidad de chicas seleccionadas
+    const cantidadChicas = (formData.chica1Id ? 1 : 0) + (formData.chica2Id ? 1 : 0)
+
     if (!isAfterhour) {
       if (formData.tipoConsumo === 'chica') {
         // Usar comisión de la categoría en lugar de porcentaje fijo
         comision = Math.round(categoria.comisionChica ?? 0)
       }
 
-      if (categoria.tipo === 'botella' && formData.tipoConsumo === 'cliente' && !formData.cortesia) {
-        const adicionales = Number(formData.chicasAdicionalesBotella || '0')
-        const comisionPorChica = turnoData?.config.comisionAcompananteBotella ?? 5000
-        
-        // Comisión por acompañante + comisión por botella (categoría.comisionChica)
-        deltaBotella = (adicionales * comisionPorChica) + (categoria.comisionChica ?? 0)
-        comision = deltaBotella
+      if (categoria.tipo === 'botella' && formData.tipoConsumo === 'cliente' && !formData.cortesia && cantidadChicas > 0) {
+        // Para botellas: la comisión de categoría se divide por cantidad de chicas
+        const comisionPorChica = Math.round((categoria.comisionChica ?? 0) / cantidadChicas)
+        comision = comisionPorChica * cantidadChicas
+        deltaBotella = comision
         precioFinal += deltaBotella
       }
     }
@@ -221,6 +221,15 @@ function NuevaComandaContent() {
       return
     }
 
+    const categoriaSeleccionada = categorias.find((c) => c.id === Number(formData.categoriaId))
+    
+    // Validar que para botellas haya al menos 1 chica
+    if (categoriaSeleccionada?.tipo === 'botella' && formData.tipoConsumo === 'cliente' && !formData.chica1Id) {
+      setError('Para botellas debes seleccionar al menos una chica')
+      setFieldErrors({ chica1Id: 'Requerida para botellas' })
+      return
+    }
+
     const validationData = {
       categoriaId: formData.categoriaId ? Number(formData.categoriaId) : null,
       tipoConsumo: formData.tipoConsumo,
@@ -250,7 +259,6 @@ function NuevaComandaContent() {
         clienteNombre: clienteSeleccionado.trim().toUpperCase(),
         chica1Id: formData.chica1Id ? Number(formData.chica1Id) : null,
         chica2Id: formData.chica2Id ? Number(formData.chica2Id) : null,
-        chicasAdicionalesBotella: Number(formData.chicasAdicionalesBotella || '0'),
         descuentoPorcentaje: formData.descuentoPorcentaje
           ? Number(formData.descuentoPorcentaje)
           : null,
@@ -455,7 +463,8 @@ function NuevaComandaContent() {
             </div>
           </div>
 
-          {formData.tipoConsumo === 'chica' && (
+          {(formData.tipoConsumo === 'chica' || 
+            (formData.tipoConsumo === 'cliente' && categorias.find((c) => c.id === Number(formData.categoriaId))?.tipo === 'botella')) && (
             <div className="bg-gray-800 p-6 rounded-lg space-y-4">
               <p className="text-xs text-gray-400">
                 Disponibles ahora: {disponibles.length} de {(turnoData?.chicas ?? []).length}
@@ -463,8 +472,11 @@ function NuevaComandaContent() {
                   <span className="ml-1 text-purple-400"> · Incluye chicas ya asignadas a {clienteSeleccionadoNombre}</span>
                 )}
               </p>
+              
               <div>
-                <label className="block text-sm font-medium mb-2">Chica 1 *</label>
+                <label className="block text-sm font-medium mb-2">
+                  Chica 1 {formData.tipoConsumo === 'cliente' && '(requerida para botella)'} *
+                </label>
                 <select
                   name="chica1Id"
                   value={formData.chica1Id}
@@ -489,7 +501,7 @@ function NuevaComandaContent() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Chica 2 (opcional)</label>
+                <label className="block text-sm font-medium mb-2">Chica 2</label>
                 <select
                   name="chica2Id"
                   value={formData.chica2Id}
@@ -508,35 +520,6 @@ function NuevaComandaContent() {
               </div>
             </div>
           )}
-
-          {(() => {
-            const categoriaSeleccionada = categorias.find((c) => c.id === Number(formData.categoriaId))
-            const mostrarDelta =
-              categoriaSeleccionada?.tipo === 'botella' && formData.tipoConsumo === 'cliente'
-
-            if (!mostrarDelta) return null
-
-            return (
-              <div className="bg-gray-800 p-6 rounded-lg">
-                <label className="block text-sm font-medium mb-2">
-                  Chicas adicionales acompanando (delta comision)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max={String(maxAcompanantesBotella)}
-                  name="chicasAdicionalesBotella"
-                  value={formData.chicasAdicionalesBotella}
-                  onChange={handleChange}
-                  className="w-full p-2 bg-gray-700 text-white rounded"
-                />
-                <p className="mt-1 text-xs text-gray-400">
-                  Maximo permitido: {maxAcompanantesBotella} · Comision por acompanante:{' '}
-                  {formatCurrency(turnoData?.config.comisionAcompananteBotella ?? 5000)}
-                </p>
-              </div>
-            )
-          })()}
 
           <div className="bg-gray-800 p-6 rounded-lg grid grid-cols-2 gap-4">
             <div>

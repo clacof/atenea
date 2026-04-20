@@ -3,6 +3,67 @@ import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import { getCycleForDate } from '@/lib/reportUtils'
 
+const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+
+/**
+ * Construye desglose diario de comisiones por chica para reporte semanal.
+ * Retorna: { chicaNombre: { lunes: X, martes: Y, ..., total: Z } }[]
+ */
+function buildComisionesSemanales(
+  comandas: Array<{
+    fecha: Date
+    chica1?: { nombre: string } | null
+    chica2?: { nombre: string } | null
+    comisionChica1?: number | null
+    comisionChica2?: number | null
+  }>,
+  mondayStart: Date,
+) {
+  // Map: chicaNombre → { lunes: num, ..., domingo: num, total: num }
+  const map = new Map<string, Record<string, number>>()
+
+  const getOrCreate = (nombre: string) => {
+    if (!map.has(nombre)) {
+      const row: Record<string, number> = { total: 0 }
+      for (const d of DIAS_SEMANA) row[d] = 0
+      map.set(nombre, row)
+    }
+    return map.get(nombre)!
+  }
+
+  for (const cmd of comandas) {
+    const fecha = new Date(cmd.fecha)
+    const diffDays = Math.floor((fecha.getTime() - mondayStart.getTime()) / (1000 * 60 * 60 * 24))
+    const diaIdx = Math.max(0, Math.min(6, diffDays))
+    const dia = DIAS_SEMANA[diaIdx]
+
+    if (cmd.chica1?.nombre && (cmd.comisionChica1 ?? 0) > 0) {
+      const row = getOrCreate(cmd.chica1.nombre)
+      row[dia] += cmd.comisionChica1!
+      row.total += cmd.comisionChica1!
+    }
+    if (cmd.chica2?.nombre && (cmd.comisionChica2 ?? 0) > 0) {
+      const row = getOrCreate(cmd.chica2.nombre)
+      row[dia] += cmd.comisionChica2!
+      row.total += cmd.comisionChica2!
+    }
+  }
+
+  const result = Array.from(map.entries()).map(([nombre, dias]) => ({
+    nombre,
+    lunes: dias.lunes,
+    martes: dias.martes,
+    miercoles: dias.miercoles,
+    jueves: dias.jueves,
+    viernes: dias.viernes,
+    sabado: dias.sabado,
+    domingo: dias.domingo,
+    total: dias.total,
+  }))
+  result.sort((a, b) => b.total - a.total)
+  return result
+}
+
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request)
   if (!user) {
@@ -11,8 +72,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const tipo = searchParams.get('tipo') || 'diario' // diario, mensual, anual
+    const tipo = searchParams.get('tipo') || 'diario' // diario, semanal, mensual, anual
     const fecha = searchParams.get('fecha') // YYYY-MM-DD para diario
+    const semana = searchParams.get('semana') // YYYY-MM-DD (lunes de la semana) para semanal
     const mes = searchParams.get('mes') // YYYY-MM para mensual
     const year = searchParams.get('year') // YYYY para anual
 
@@ -33,6 +95,23 @@ export async function GET(request: NextRequest) {
       startDate = cycle.startDate
       endDate = cycle.endDate
       periodLabel = cycle.label
+    } else if (tipo === 'semanal') {
+      // Semana: lunes a domingo
+      const targetDate = semana ? new Date(semana) : new Date()
+      const day = targetDate.getDay()
+      const diff = day === 0 ? 6 : day - 1 // lunes = 0
+      const monday = new Date(targetDate)
+      monday.setDate(monday.getDate() - diff)
+      monday.setHours(0, 0, 0, 0)
+      const sunday = new Date(monday)
+      sunday.setDate(sunday.getDate() + 6)
+      sunday.setHours(23, 59, 59, 999)
+      startDate = monday
+      endDate = sunday
+
+      const fmt = (d: Date) =>
+        d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
+      periodLabel = `Semana ${fmt(monday)} - ${fmt(sunday)}`
     } else if (tipo === 'mensual') {
       const [year, month] = (mes || new Date().toISOString().split('T')[0].slice(0, 7)).split('-').map(Number)
       startDate = new Date(year, month - 1, 1)
@@ -142,6 +221,8 @@ export async function GET(request: NextRequest) {
       porMedioPago,
       porChica: Object.entries(porChica).map(([nombre, data]) => ({ nombre, ...data })),
       porCategoria: Object.entries(porCategoria).map(([nombre, data]) => ({ nombre, ...data })),
+      // Desglose diario de comisiones por chica para reporte semanal
+      ...(tipo === 'semanal' ? { comisionesSemanales: buildComisionesSemanales(comandas, startDate) } : {}),
     })
   } catch (error) {
     console.error('Error generating report:', error)

@@ -41,6 +41,7 @@ export default function TurnoActivo() {
   const [turno, setTurno] = useState<TurnoData | null>(null)
   const [loading, setLoading] = useState(true)
   const [cerrando, setCerrando] = useState<string | null>(null)
+  const [liberando, setLiberando] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [expandedCliente, setExpandedCliente] = useState<string | null>(null)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
@@ -100,6 +101,33 @@ export default function TurnoActivo() {
   }
 
   const disponiblesCount = turno?.chicas.filter((c) => c.disponible).length ?? 0
+
+  const handleLiberarChica = async (chicaId: number, chicaNombre: string) => {
+    if (!confirm(`Liberar a ${chicaNombre}? Sera removida de las comandas activas donde esta asignada.`))
+      return
+
+    try {
+      setLiberando(chicaId)
+      setError('')
+      const res = await fetch('/api/comandas/turno-activo', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ chicaId }),
+      })
+
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error || 'Error al liberar chica')
+      }
+
+      await loadTurno()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al liberar chica')
+    } finally {
+      setLiberando(null)
+    }
+  }
+
   const ocupadasCount = turno?.chicas.filter((c) => !c.disponible).length ?? 0
   const totalActivo = turno?.clientesActivos.reduce((s, c) => s + c.subtotal, 0) ?? 0
 
@@ -212,15 +240,26 @@ export default function TurnoActivo() {
                           <p className="text-[11px] text-rose-200/90 truncate">Atiende: {ch.clienteAtendiendo}</p>
                         )}
                       </div>
-                      <span
-                        className={`text-[11px] px-2 py-1 rounded-full font-semibold shrink-0 ${
-                          ch.disponible
-                            ? 'bg-emerald-400/15 text-emerald-300 border border-emerald-300/25'
-                            : 'bg-rose-400/15 text-rose-300 border border-rose-300/25'
-                        }`}
-                      >
-                        {ch.disponible ? 'Disponible' : 'Ocupada'}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {!ch.disponible && (
+                          <button
+                            onClick={() => handleLiberarChica(ch.id, ch.nombre)}
+                            disabled={liberando === ch.id}
+                            className="text-[10px] px-2 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 hover:bg-amber-500/30 disabled:opacity-50"
+                          >
+                            {liberando === ch.id ? '...' : 'Liberar'}
+                          </button>
+                        )}
+                        <span
+                          className={`text-[11px] px-2 py-1 rounded-full font-semibold ${
+                            ch.disponible
+                              ? 'bg-emerald-400/15 text-emerald-300 border border-emerald-300/25'
+                              : 'bg-rose-400/15 text-rose-300 border border-rose-300/25'
+                          }`}
+                        >
+                          {ch.disponible ? 'Disponible' : 'Ocupada'}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -1,21 +1,27 @@
 {
   "name": "atenea",
   "version": "0.1.0",
+  "main": "electron/main.cjs",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build",
     "lint": "eslint",
-    "db:seed": "tsx app/seed.ts"
+    "db:seed": "tsx app/seed.ts",
+    "electron:dev": "wait-on tcp:3000 && cross-env NODE_ENV=development ELECTRON_START_URL=http://localhost:3000 electron electron/main.cjs",
+    "dev:electron": "concurrently -k \"npm run dev\" \"npm run electron:dev\"",
+    "start:electron": "cross-env NODE_ENV=production electron electron/main.cjs",
+    "build:electron": "npm run build && electron-builder --dir",
+    "dist:electron": "npm run build && electron-builder"
   },
   "dependencies": {
-    "@prisma/adapter-d1": "^7.5.0",
     "@prisma/client": "^6.19.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.8.0",
     "chart.js": "^4.5.1",
     "html2pdf": "^0.0.11",
     "jsonwebtoken": "^9.0.3",
@@ -31,10 +37,48 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^37.7.1",
+    "electron-builder": "^26.0.12",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.0.1"
+  },
+  "build": {
+    "appId": "com.atenea.desktop",
+    "productName": "Atenea",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "**/*",
+      "!**/.git/**",
+      "!**/.next/cache/**",
+      "!**/node_modules/.cache/**",
+      "!**/*.log",
+      "!**/.env*"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.business"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }

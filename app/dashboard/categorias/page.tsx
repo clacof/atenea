@@ -23,6 +23,9 @@ interface Categoria {
   precioChica?: number
   comisionChica?: number
   precio?: number
+  recargoCreditoCliente?: number
+  recargoCreditoChica?: number
+  soloTransferencia?: boolean
   activa: boolean
 }
 
@@ -43,6 +46,9 @@ interface FormData {
   precioChica: number | ''
   comisionChica: number | ''
   precio: number | ''
+  recargoCreditoCliente: number | ''
+  recargoCreditoChica: number | ''
+  soloTransferencia: boolean
 }
 
 export default function Categorias() {
@@ -63,6 +69,9 @@ export default function Categorias() {
     precioChica: '',
     comisionChica: '',
     precio: '',
+    recargoCreditoCliente: '',
+    recargoCreditoChica: '',
+    soloTransferencia: false,
   })
 
   useEffect(() => {
@@ -111,11 +120,14 @@ export default function Categorias() {
         precioChica: '',
         comisionChica: '',
         precio: '',
+        recargoCreditoCliente: '',
+        recargoCreditoChica: '',
+        soloTransferencia: prev.soloTransferencia,
       }))
     } else {
       setFormData(prev => ({
         ...prev,
-        [name]: ['precioCliente', 'precioChica', 'comisionChica', 'precio'].includes(name)
+        [name]: ['precioCliente', 'precioChica', 'comisionChica', 'precio', 'recargoCreditoCliente', 'recargoCreditoChica'].includes(name)
           ? (value === '' ? '' : Number(value))
           : value,
       }))
@@ -163,6 +175,9 @@ export default function Categorias() {
       precioChica: '',
       comisionChica: '',
       precio: '',
+      recargoCreditoCliente: '',
+      recargoCreditoChica: '',
+      soloTransferencia: false,
     })
     setFieldErrors({})
     setError('')
@@ -186,6 +201,9 @@ export default function Categorias() {
       precioChica: categoria.precioChica ?? '',
       comisionChica: categoria.comisionChica ?? '',
       precio: categoria.precio ?? '',
+      recargoCreditoCliente: categoria.recargoCreditoCliente ?? '',
+      recargoCreditoChica: categoria.recargoCreditoChica ?? '',
+      soloTransferencia: categoria.soloTransferencia ?? false,
     })
     setShowModal(true)
   }
@@ -205,6 +223,9 @@ export default function Categorias() {
         nombre: formData.nombre,
         tipo: formData.tipo,
         isAfterhour: formData.isAfterhour,
+        soloTransferencia: formData.soloTransferencia,
+        recargoCreditoCliente: formData.recargoCreditoCliente ? Number(formData.recargoCreditoCliente) : null,
+        recargoCreditoChica: formData.recargoCreditoChica ? Number(formData.recargoCreditoChica) : null,
       }
 
       if (formData.tipo === 'trago') {
@@ -492,6 +513,44 @@ export default function Categorias() {
               />
               Categoria afterhour (comision solo casa)
             </label>
+
+            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                name="soloTransferencia"
+                checked={formData.soloTransferencia}
+                onChange={handleChange}
+                className="accent-yellow-500"
+              />
+              Solo transferencia (ej: Blue Label)
+            </label>
+
+            <div className="border border-gray-700 rounded-lg p-4 space-y-3">
+              <p className="text-sm font-medium text-orange-400">💳 Recargo por pago con credito</p>
+              <p className="text-xs text-gray-400">Monto adicional que se suma al precio cuando se paga con credito</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormField label="Recargo Credito Cliente ($)">
+                  <Input
+                    type="number"
+                    name="recargoCreditoCliente"
+                    value={formData.recargoCreditoCliente}
+                    onChange={handleChange}
+                    placeholder="0"
+                    min="0"
+                  />
+                </FormField>
+                <FormField label="Recargo Credito Chica ($)">
+                  <Input
+                    type="number"
+                    name="recargoCreditoChica"
+                    value={formData.recargoCreditoChica}
+                    onChange={handleChange}
+                    placeholder="0"
+                    min="0"
+                  />
+                </FormField>
+              </div>
+            </div>
 
             {formData.tipo === 'trago' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

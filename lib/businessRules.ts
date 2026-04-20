@@ -15,6 +15,9 @@ export interface CommissionInput {
   descuentoPorcentaje?: number | null
   chica1Id?: number | null
   chica2Id?: number | null
+  medioPago?: string | null
+  recargoCreditoCliente?: number | null
+  recargoCreditoChica?: number | null
 }
 
 export interface CommissionResult {
@@ -22,12 +25,14 @@ export interface CommissionResult {
   comisionTotal: number
   comisionChica1: number
   comisionChica2: number
+  recargoCredito: number
 }
 
 /**
  * Calcula precio final y comisiones de una comanda.
  *  - precioBase >= 150.000 → 30 % de comision
  *  - precioBase < 150.000  → 40 % de comision
+ *  - Pago con credito agrega recargo configurable por categoria
  * Los montos intermedios se redondean para evitar centavos.
  */
 export function calculateComision(input: CommissionInput): CommissionResult {
@@ -43,12 +48,26 @@ export function calculateComision(input: CommissionInput): CommissionResult {
     descuentoPorcentaje,
     chica1Id,
     chica2Id,
+    medioPago,
+    recargoCreditoCliente,
+    recargoCreditoChica,
   } = input
 
-  let precioFinal = precioBase
+  // Calcular recargo por credito
+  let recargoCredito = 0
+  if (medioPago === 'credito' && !cortesia) {
+    if (tipoConsumo === 'chica' && recargoCreditoChica) {
+      recargoCredito = recargoCreditoChica
+    } else if (recargoCreditoCliente) {
+      recargoCredito = recargoCreditoCliente
+    }
+  }
+
+  let precioFinal = precioBase + recargoCredito
 
   if (cortesia) {
     precioFinal = 0
+    recargoCredito = 0
   } else {
     if (descuentoMonto) precioFinal -= descuentoMonto
     if (descuentoPorcentaje) precioFinal -= precioFinal * (descuentoPorcentaje / 100)
@@ -61,7 +80,7 @@ export function calculateComision(input: CommissionInput): CommissionResult {
   let comisionChica2 = 0
   if (isAfterhour) {
     // Regla de negocio: afterhour no paga comision a chicas, es solo para la casa.
-    return { precioFinal, comisionTotal: 0, comisionChica1: 0, comisionChica2: 0 }
+    return { precioFinal, comisionTotal: 0, comisionChica1: 0, comisionChica2: 0, recargoCredito }
   }
 
   if (
@@ -88,5 +107,5 @@ export function calculateComision(input: CommissionInput): CommissionResult {
     }
   }
 
-  return { precioFinal, comisionTotal, comisionChica1, comisionChica2 }
+  return { precioFinal, comisionTotal, comisionChica1, comisionChica2, recargoCredito }
 }

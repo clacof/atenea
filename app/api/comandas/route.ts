@@ -96,6 +96,14 @@ export async function POST(request: NextRequest) {
         throw Object.assign(new Error('Categoria no encontrada'), { statusCode: 400 })
       }
 
+      // Validar restriccion soloTransferencia (ej: Blue Label)
+      if (categoria.soloTransferencia && medioPago !== 'transferencia') {
+        throw Object.assign(
+          new Error(`${categoria.nombre} solo permite pago por transferencia`),
+          { statusCode: 400 },
+        )
+      }
+
       const { start, end } = getTodayBounds()
 
       const configRows = await tx.configGeneral.findMany({
@@ -216,6 +224,9 @@ export async function POST(request: NextRequest) {
         descuentoPorcentaje: descuentoPorcentaje ?? null,
         chica1Id: chica1Id ?? null,
         chica2Id: chica2Id ?? null,
+        medioPago,
+        recargoCreditoCliente: categoria.recargoCreditoCliente ?? null,
+        recargoCreditoChica: categoria.recargoCreditoChica ?? null,
       })
 
       const hora = new Date().toTimeString().split(' ')[0]

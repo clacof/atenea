@@ -36,10 +36,11 @@ async function main() {
     // Categorias
     await prisma.categoria.createMany({
       data: [
-        { nombre: 'Cockteles / Trago preparado', tipo: 'trago', precioCliente: 30000, precioChica: 35000, comisionChica: 12000 },
-        { nombre: 'Vodka naranja', tipo: 'trago', precioCliente: 20000, precioChica: 25000, comisionChica: 10000 },
-        { nombre: 'Botella Premium', tipo: 'botella', precio: 150000 },
-        { nombre: 'Botella Super Premium', tipo: 'botella', precio: 250000 },
+        { nombre: 'Cockteles / Trago preparado', tipo: 'trago', precioCliente: 30000, precioChica: 35000, comisionChica: 12000, recargoCreditoCliente: 2000, recargoCreditoChica: 2000 },
+        { nombre: 'Vodka naranja', tipo: 'trago', precioCliente: 20000, precioChica: 25000, comisionChica: 10000, recargoCreditoCliente: 2000, recargoCreditoChica: 2000 },
+        { nombre: 'Botella Premium', tipo: 'botella', precio: 150000, recargoCreditoCliente: 5000, recargoCreditoChica: 5000 },
+        { nombre: 'Botella Super Premium', tipo: 'botella', precio: 250000, recargoCreditoCliente: 5000, recargoCreditoChica: 5000 },
+        { nombre: 'Blue Label', tipo: 'botella', precio: 500000, soloTransferencia: true },
         { nombre: 'After Hour', tipo: 'trago', isAfterhour: true, precioCliente: 80000, precioChica: 80000, comisionChica: 0 },
       ],
     })

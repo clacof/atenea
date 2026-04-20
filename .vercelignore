@@ -1,0 +1,8 @@
+release/
+electron/
+prisma/dev.db
+*.dmg
+*.zip
+*.blockmap
+*.AppImage
+*.exe

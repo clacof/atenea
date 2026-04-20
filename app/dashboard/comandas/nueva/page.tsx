@@ -16,12 +16,16 @@ interface Categoria {
   precioCliente?: number | null
   precioChica?: number | null
   precio?: number | null
+  recargoCreditoCliente?: number | null
+  recargoCreditoChica?: number | null
+  soloTransferencia?: boolean
 }
 
 interface ChicaDisponibilidad {
   id: number
   nombre: string
   disponible: boolean
+  clienteAtendiendo?: string | null
 }
 
 interface ClienteActivo {
@@ -53,6 +57,7 @@ function NuevaComandaContent() {
     precioFinal: 0,
     comision: 0,
     deltaBotella: 0,
+    recargoCredito: 0,
   })
   const [formData, setFormData] = useState({
     categoriaId: '',
@@ -108,17 +113,29 @@ function NuevaComandaContent() {
   useEffect(() => {
     const categoria = categorias.find((c) => c.id === Number(formData.categoriaId))
     if (!categoria) {
-      setPrecioInfo({ precioBase: 0, precioFinal: 0, comision: 0, deltaBotella: 0 })
+      setPrecioInfo({ precioBase: 0, precioFinal: 0, comision: 0, deltaBotella: 0, recargoCredito: 0 })
       return
     }
 
     const baseCliente = categoria.precioCliente ?? categoria.precio ?? 0
     const baseChica = categoria.precioChica ?? 0
     const precioBase = formData.tipoConsumo === 'cliente' ? baseCliente : baseChica
-    let precioFinal = precioBase
+
+    // Calcular recargo por credito
+    let recargoCredito = 0
+    if (formData.medioPago === 'credito' && !formData.cortesia) {
+      if (formData.tipoConsumo === 'chica' && categoria.recargoCreditoChica) {
+        recargoCredito = categoria.recargoCreditoChica
+      } else if (categoria.recargoCreditoCliente) {
+        recargoCredito = categoria.recargoCreditoCliente
+      }
+    }
+
+    let precioFinal = precioBase + recargoCredito
 
     if (formData.cortesia) {
       precioFinal = 0
+      recargoCredito = 0
     } else {
       if (formData.descuentoMonto) {
         precioFinal -= Number(formData.descuentoMonto)
@@ -152,6 +169,7 @@ function NuevaComandaContent() {
       precioFinal: Math.max(0, Math.round(precioFinal)),
       comision: Math.max(0, Math.round(comision)),
       deltaBotella,
+      recargoCredito,
     })
   }, [formData, categorias])
 
@@ -172,6 +190,8 @@ function NuevaComandaContent() {
         ...prev,
         clienteExistente: '',
         clienteNombre: `C${turnoData?.siguienteNumeroCliente ?? 1}`,
+        chica1Id: '',
+        chica2Id: '',
       }))
       return
     }
@@ -180,6 +200,8 @@ function NuevaComandaContent() {
       ...prev,
       clienteExistente: '',
       clienteNombre: '',
+      chica1Id: '',
+      chica2Id: '',
     }))
   }
 
@@ -257,12 +279,17 @@ function NuevaComandaContent() {
     }
   }
 
+  const clienteSeleccionadoNombre =
+    modoCliente === 'existente' ? formData.clienteExistente : formData.clienteNombre
   const clienteActivo = turnoData?.clientesActivos.find(
     (c) => c.clienteNombre === formData.clienteExistente,
   )
   const subtotalAnterior = clienteActivo?.subtotal ?? 0
   const totalPagar = subtotalAnterior + precioInfo.precioFinal
-  const disponibles = (turnoData?.chicas ?? []).filter((c) => c.disponible)
+  // Mostrar chicas disponibles + chicas ya asignadas al mismo cliente
+  const disponibles = (turnoData?.chicas ?? []).filter(
+    (c) => c.disponible || c.clienteAtendiendo === clienteSeleccionadoNombre,
+  )
   const maxAcompanantesBotella = Math.min(
     disponibles.length,
     turnoData?.config.maxChicasBottella ?? disponibles.length,
@@ -320,18 +347,54 @@ function NuevaComandaContent() {
                   name="clienteExistente"
                   value={formData.clienteExistente}
                   onChange={(e) => {
+                    const selectedCliente = e.target.value
                     handleChange(e)
-                    setFormData((prev) => ({ ...prev, clienteNombre: e.target.value }))
+                    // Auto-populate chicas assigned to this client
+                    const chicasDelCliente = (turnoData?.chicas ?? []).filter(
+                      (c) => c.clienteAtendiendo === selectedCliente,
+                    )
+                    setFormData((prev) => ({
+                      ...prev,
+                      clienteNombre: selectedCliente,
+                      chica1Id: chicasDelCliente[0] ? String(chicasDelCliente[0].id) : prev.chica1Id,
+                      chica2Id: chicasDelCliente[1] ? String(chicasDelCliente[1].id) : '',
+                      tipoConsumo: chicasDelCliente.length > 0 ? 'chica' : prev.tipoConsumo,
+                    }))
                   }}
                   className="w-full p-2 bg-gray-700 text-white rounded"
                 >
                   <option value="">Seleccionar cliente</option>
-                  {(turnoData?.clientesActivos ?? []).map((cliente) => (
-                    <option key={cliente.clienteNombre} value={cliente.clienteNombre}>
-                      {cliente.clienteNombre} - {formatCurrency(cliente.subtotal)}
-                    </option>
-                  ))}
+                  {(turnoData?.clientesActivos ?? []).map((cliente) => {
+                    const chicasDelCliente = (turnoData?.chicas ?? []).filter(
+                      (c) => c.clienteAtendiendo === cliente.clienteNombre,
+                    )
+                    const chicaNames = chicasDelCliente.map((c) => c.nombre).join(', ')
+                    return (
+                      <option key={cliente.clienteNombre} value={cliente.clienteNombre}>
+                        {cliente.clienteNombre} - {formatCurrency(cliente.subtotal)}
+                        {chicaNames ? ` (${chicaNames})` : ''}
+                      </option>
+                    )
+                  })}
                 </select>
+
+                {formData.clienteExistente && (() => {
+                  const chicasAsignadas = (turnoData?.chicas ?? []).filter(
+                    (c) => c.clienteAtendiendo === formData.clienteExistente,
+                  )
+                  if (chicasAsignadas.length === 0) return null
+                  return (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {chicasAsignadas.map((c) => (
+                        <span key={c.id} className="inline-flex items-center gap-1 rounded-full bg-purple-500/20 border border-purple-500/30 px-2.5 py-1 text-xs font-medium text-purple-300">
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-purple-400" />
+                          {c.nombre}
+                        </span>
+                      ))}
+                      <span className="text-xs text-gray-500 self-center">asignadas actualmente</span>
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </div>
@@ -393,6 +456,9 @@ function NuevaComandaContent() {
             <div className="bg-gray-800 p-6 rounded-lg space-y-4">
               <p className="text-xs text-gray-400">
                 Disponibles ahora: {disponibles.length} de {(turnoData?.chicas ?? []).length}
+                {modoCliente === 'existente' && disponibles.some((c) => c.clienteAtendiendo === clienteSeleccionadoNombre) && (
+                  <span className="ml-1 text-purple-400"> · Incluye chicas ya asignadas a {clienteSeleccionadoNombre}</span>
+                )}
               </p>
               <div>
                 <label className="block text-sm font-medium mb-2">Chica 1 *</label>
@@ -412,7 +478,7 @@ function NuevaComandaContent() {
                   <option value="">Seleccionar chica</option>
                   {disponibles.map((chica) => (
                     <option key={chica.id} value={chica.id}>
-                      {chica.nombre}
+                      {chica.nombre}{chica.clienteAtendiendo === clienteSeleccionadoNombre ? ' ★' : ''}
                     </option>
                   ))}
                 </select>
@@ -432,7 +498,7 @@ function NuevaComandaContent() {
                     .filter((chica) => String(chica.id) !== formData.chica1Id)
                     .map((chica) => (
                       <option key={chica.id} value={chica.id}>
-                        {chica.nombre}
+                        {chica.nombre}{chica.clienteAtendiendo === clienteSeleccionadoNombre ? ' ★' : ''}
                       </option>
                     ))}
                 </select>
@@ -509,24 +575,50 @@ function NuevaComandaContent() {
 
             <div>
               <label className="block text-sm font-medium mb-2">Medio de Pago</label>
-              <select
-                name="medioPago"
-                value={formData.medioPago}
-                onChange={(e) => {
-                  handleChange(e)
-                  if (fieldErrors.medioPago) {
-                    setFieldErrors({ ...fieldErrors, medioPago: '' })
-                  }
-                }}
-                className={`w-full p-2 bg-gray-700 text-white rounded ${
-                  fieldErrors.medioPago ? 'border-2 border-red-500' : ''
-                }`}
-              >
-                <option value="efectivo">Efectivo</option>
-                <option value="transferencia">Transferencia</option>
-                <option value="debito">Debito</option>
-                <option value="credito">Credito</option>
-              </select>
+              {(() => {
+                const categoriaSeleccionada = categorias.find((c) => c.id === Number(formData.categoriaId))
+                const esSoloTransferencia = categoriaSeleccionada?.soloTransferencia
+
+                if (esSoloTransferencia && formData.medioPago !== 'transferencia') {
+                  setTimeout(() => {
+                    setFormData((prev) => ({ ...prev, medioPago: 'transferencia' }))
+                  }, 0)
+                }
+
+                return (
+                  <>
+                    <select
+                      name="medioPago"
+                      value={esSoloTransferencia ? 'transferencia' : formData.medioPago}
+                      onChange={(e) => {
+                        handleChange(e)
+                        if (fieldErrors.medioPago) {
+                          setFieldErrors({ ...fieldErrors, medioPago: '' })
+                        }
+                      }}
+                      disabled={esSoloTransferencia}
+                      className={`w-full p-2 bg-gray-700 text-white rounded ${
+                        fieldErrors.medioPago ? 'border-2 border-red-500' : ''
+                      } ${esSoloTransferencia ? 'opacity-60' : ''}`}
+                    >
+                      <option value="efectivo">Efectivo</option>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="debito">Debito</option>
+                      <option value="credito">Credito</option>
+                    </select>
+                    {esSoloTransferencia && (
+                      <p className="mt-1 text-xs text-yellow-400">
+                        ⚠ {categoriaSeleccionada.nombre} solo permite pago por transferencia
+                      </p>
+                    )}
+                    {formData.medioPago === 'credito' && precioInfo.recargoCredito > 0 && (
+                      <p className="mt-1 text-xs text-orange-400">
+                        💳 Recargo por credito: +{formatCurrency(precioInfo.recargoCredito)}
+                      </p>
+                    )}
+                  </>
+                )
+              })()}
               <FormError message={fieldErrors.medioPago} />
             </div>
           </div>
@@ -566,6 +658,12 @@ function NuevaComandaContent() {
             {precioInfo.deltaBotella > 0 && (
               <p className="text-xs mt-3 text-gray-300">
                 Delta botella aplicado por acompanantes: {formatCurrency(precioInfo.deltaBotella)}
+              </p>
+            )}
+
+            {precioInfo.recargoCredito > 0 && (
+              <p className="text-xs mt-2 text-orange-300">
+                💳 Recargo credito incluido: +{formatCurrency(precioInfo.recargoCredito)}
               </p>
             )}
           </div>

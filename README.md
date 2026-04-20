@@ -67,6 +67,7 @@ npm run db:seed
 
 - Guia completa: DOCUMENTATION.md
 - Arranque rapido: QUICK-START.md
+- Electron desktop: ELECTRON-GUIDE.md
 - Estado frontend: FRONTEND_STATUS.md
 - PWA: PWA-GUIDE.md y PWA-CHECKLIST.md
 - Compartir por tunnel: VSCODE-TUNNEL.md

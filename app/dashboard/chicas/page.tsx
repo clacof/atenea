@@ -37,7 +37,7 @@ export default function Chicas() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [changingId, setChangingId] = useState<number | null>(null)
   const [formData, setFormData] = useState<FormData>({
     nombre: '',
   })
@@ -125,28 +125,33 @@ export default function Chicas() {
     }
   }
 
-  const handleDelete = async (chicaId: number) => {
-    if (!confirm('Deseas eliminar esta chica? Quedara inactiva.')) {
+  const handleToggleActiva = async (chica: Chica) => {
+    const nuevaAccion = chica.activa ? 'marcar como ausente' : 'marcar como activa'
+    if (!confirm(`¿Seguro que deseas ${nuevaAccion} a ${chica.nombre}?`)) {
       return
     }
 
     try {
-      setDeletingId(chicaId)
-      const response = await fetch(`/api/chicas/${chicaId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
+      setChangingId(chica.id)
+      const response = await fetch(`/api/chicas/${chica.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ activa: !chica.activa }),
       })
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'No se pudo eliminar la chica')
+        throw new Error(data.error || 'No se pudo actualizar el estado')
       }
 
       await fetchChicas()
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'No se pudo eliminar la chica')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo actualizar el estado')
     } finally {
-      setDeletingId(null)
+      setChangingId(null)
     }
   }
 
@@ -168,11 +173,11 @@ export default function Chicas() {
       cell: (chica) => currentUser?.rol === 'admin' ? (
         <Button
           size="sm"
-          variant="danger"
-          disabled={deletingId === chica.id}
-          onClick={() => handleDelete(chica.id)}
+          variant={chica.activa ? 'danger' : 'primary'}
+          disabled={changingId === chica.id}
+          onClick={() => handleToggleActiva(chica)}
         >
-          Eliminar
+          {chica.activa ? 'Marcar como ausente' : 'Marcar como activa'}
         </Button>
       ) : (
         <span className="text-xs text-gray-500">Solo admin</span>

@@ -155,3 +155,50 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
+
+/**
+ * PATCH /api/comandas/turno-activo
+ * Body: { chicaId: number }
+ * Libera una chica de todas sus comandas activas hoy (quita la asignacion).
+ * Las comandas siguen activas; solo se remueve la referencia a la chica.
+ */
+export async function PATCH(request: NextRequest) {
+  const user = getUserFromRequest(request)
+  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+  try {
+    const body = await request.json()
+    const chicaId = typeof body.chicaId === 'number' ? body.chicaId : null
+
+    if (!chicaId) {
+      return NextResponse.json({ error: 'chicaId es requerido' }, { status: 400 })
+    }
+
+    const { start, end } = getTodayBounds()
+
+    // Liberar como chica1
+    const freed1 = await prisma.comanda.updateMany({
+      where: {
+        chica1Id: chicaId,
+        estado: 'activa',
+        fecha: { gte: start, lte: end },
+      },
+      data: { chica1Id: null, comisionChica1: 0 },
+    })
+
+    // Liberar como chica2
+    const freed2 = await prisma.comanda.updateMany({
+      where: {
+        chica2Id: chicaId,
+        estado: 'activa',
+        fecha: { gte: start, lte: end },
+      },
+      data: { chica2Id: null, comisionChica2: 0 },
+    })
+
+    return NextResponse.json({ freed: freed1.count + freed2.count })
+  } catch (error) {
+    console.error('Error liberando chica:', error)
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+  }
+}

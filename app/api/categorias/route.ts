@@ -61,6 +61,9 @@ export async function POST(request: NextRequest) {
         precioChica: data.precioChica || null,
         comisionChica: data.comisionChica || null,
         precio: data.precio || null,
+        recargoCreditoCliente: data.recargoCreditoCliente || null,
+        recargoCreditoChica: data.recargoCreditoChica || null,
+        soloTransferencia: Boolean(data.soloTransferencia),
       },
     })
 

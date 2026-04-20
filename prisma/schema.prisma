@@ -9,7 +9,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -50,16 +50,19 @@ model ConfigGeneral {
 }
 
 model Categoria {
-  id            Int            @id @default(autoincrement())
-  nombre        String
-  tipo          TipoCategoria  @default(trago)
-  isAfterhour   Boolean        @default(false)
-  precioCliente Int?           // Para tragos
-  precioChica   Int?           // Para tragos
-  comisionChica Int?           // Para tragos
-  precio        Int?           // Para botellas
-  activa        Boolean        @default(true)
-  comandas      Comanda[]
+  id                    Int            @id @default(autoincrement())
+  nombre                String
+  tipo                  TipoCategoria  @default(trago)
+  isAfterhour           Boolean        @default(false)
+  precioCliente         Int?           // Para tragos
+  precioChica           Int?           // Para tragos
+  comisionChica         Int?           // Para tragos
+  precio                Int?           // Para botellas
+  recargoCreditoCliente Int?           // Recargo por pago credito (cliente)
+  recargoCreditoChica   Int?           // Recargo por pago credito (chica)
+  soloTransferencia     Boolean        @default(false) // Solo permite pago por transferencia (ej: Blue Label)
+  activa                Boolean        @default(true)
+  comandas              Comanda[]
 }
 
 model Usuario {

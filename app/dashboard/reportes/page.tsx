@@ -13,6 +13,18 @@ import { getAuthHeaders } from '../../../lib/client-auth'
 import { downloadFile, generateExcel, generatePDF, type ExportData } from '../../../lib/exportUtils'
 import { formatCurrency, formatPercentage } from '../../../lib/formatters'
 
+interface ComisionSemanal {
+  nombre: string
+  lunes: number
+  martes: number
+  miercoles: number
+  jueves: number
+  viernes: number
+  sabado: number
+  domingo: number
+  total: number
+}
+
 interface ReportData {
   tipo: string
   periodo: string
@@ -27,6 +39,7 @@ interface ReportData {
   porMedioPago: Array<{ medioPago: string; total: number; porcentaje: number }>
   porChica?: Array<{ nombre: string; cantidad: number; comision: number; ventas: number }>
   porCategoria?: Array<{ nombre: string; cantidad: number; total: number; comision: number }>
+  comisionesSemanales?: ComisionSemanal[]
 }
 
 export default function Reportes() {
@@ -36,8 +49,9 @@ export default function Reportes() {
   const [reportData, setReportData] = useState<ReportData | null>(null)
   
   // Filtros
-  const [tipoReporte, setTipoReporte] = useState<'diario' | 'mensual' | 'anual'>('diario')
+  const [tipoReporte, setTipoReporte] = useState<'diario' | 'semanal' | 'mensual' | 'anual'>('diario')
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0])
+  const [semanaSeleccionada, setSemanaSeleccionada] = useState(new Date().toISOString().split('T')[0])
   const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().split('T')[0].slice(0, 7))
   const [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear().toString())
 
@@ -49,6 +63,8 @@ export default function Reportes() {
       
       if (tipoReporte === 'diario') {
         url += '&fecha=' + fechaSeleccionada
+      } else if (tipoReporte === 'semanal') {
+        url += '&semana=' + semanaSeleccionada
       } else if (tipoReporte === 'mensual') {
         url += '&mes=' + mesSeleccionado
       } else if (tipoReporte === 'anual') {
@@ -70,7 +86,7 @@ export default function Reportes() {
     } finally {
       setLoading(false)
     }
-  }, [tipoReporte, fechaSeleccionada, mesSeleccionado, anioSeleccionado])
+  }, [tipoReporte, fechaSeleccionada, semanaSeleccionada, mesSeleccionado, anioSeleccionado])
 
   useEffect(() => {
     fetchReports()
@@ -78,6 +94,10 @@ export default function Reportes() {
 
   const handleFechaChange = (fecha: string) => {
     setFechaSeleccionada(fecha)
+  }
+
+  const handleSemanaChange = (semana: string) => {
+    setSemanaSeleccionada(semana)
   }
 
   const handleMesChange = (mes: string) => {
@@ -165,50 +185,77 @@ export default function Reportes() {
         <ReportFilters
           tipoReporte={tipoReporte}
           fechaSeleccionada={fechaSeleccionada}
+          semanaSeleccionada={semanaSeleccionada}
           mesSeleccionado={mesSeleccionado}
           anioSeleccionado={anioSeleccionado}
           periodoActual={reportData?.periodo}
           onTipoReporteChange={setTipoReporte}
           onFechaChange={handleFechaChange}
+          onSemanaChange={handleSemanaChange}
           onMesChange={handleMesChange}
           onAnioChange={handleAnioChange}
           onApply={aplicarFiltro}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <MetricCard label="Total Ventas" value={formatCurrency(resumen?.totalVentas || 0)} accent="green" />
-          <MetricCard label="Total Comisiones" value={formatCurrency(resumen?.totalComisiones || 0)} accent="blue" />
+          <MetricCard label="Comisiones" value={formatCurrency(resumen?.totalComisiones || 0)} accent="blue" />
           <MetricCard label="Ticket Promedio" value={formatCurrency(Math.round(resumen?.promedioPorComanda || 0))} accent="purple" />
-          <MetricCard label="Total Comandas" value={resumen?.totalComandas || '0'} accent="orange" />
+          <MetricCard label="Comandas" value={resumen?.totalComandas || '0'} accent="orange" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <DataTable
-            columns={paymentColumns}
-            data={porMedioPago || []}
-            getRowKey={(item) => item.medioPago}
-            emptyTitle="No hay datos de pagos disponibles"
-          />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <h3 className="mb-3 text-base font-semibold text-gray-300 flex items-center gap-2">
+              <span className="inline-block h-1 w-1 rounded-full bg-blue-400" />
+              Medios de Pago
+            </h3>
+            <DataTable
+              columns={paymentColumns}
+              data={porMedioPago || []}
+              getRowKey={(item) => item.medioPago}
+              emptyTitle="No hay datos de pagos disponibles"
+            />
+          </div>
 
-          <Card className="p-6">
-            <h3 className="mb-4 text-xl font-bold">Resumen del Periodo</h3>
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400">
-                Periodo: {reportData?.periodo || '-'}
-              </p>
-              <div className="pt-3 border-t border-gray-700">
-                <p className="mb-2"><span className="text-gray-400">Tipo:</span> <span className="capitalize">{tipoReporte}</span></p>
-                <p className="mb-2"><span className="text-gray-400">Comandas:</span> {resumen?.totalComandas || '0'}</p>
-                <p className="mb-2"><span className="text-gray-400">Ventas Chicas:</span> {formatCurrency(resumen?.ventasChicas || 0)}</p>
-                <p><span className="text-gray-400">Comisiones:</span> <span className="text-green-400">{formatCurrency(resumen?.totalComisiones || 0)}</span></p>
+          <div>
+            <h3 className="mb-3 text-base font-semibold text-gray-300 flex items-center gap-2">
+              <span className="inline-block h-1 w-1 rounded-full bg-purple-400" />
+              Resumen del Periodo
+            </h3>
+            <Card className="p-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg bg-gray-800/50 p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Tipo</p>
+                  <p className="mt-1 text-lg font-semibold capitalize">{tipoReporte}</p>
+                </div>
+                <div className="rounded-lg bg-gray-800/50 p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Comandas</p>
+                  <p className="mt-1 text-lg font-semibold">{resumen?.totalComandas || '0'}</p>
+                </div>
+                <div className="rounded-lg bg-gray-800/50 p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Ventas Clientes</p>
+                  <p className="mt-1 text-lg font-semibold text-blue-400">{formatCurrency(resumen?.ventasClientes || 0)}</p>
+                </div>
+                <div className="rounded-lg bg-gray-800/50 p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Ventas Chicas</p>
+                  <p className="mt-1 text-lg font-semibold text-purple-400">{formatCurrency(resumen?.ventasChicas || 0)}</p>
+                </div>
               </div>
-            </div>
-          </Card>
+              <div className="mt-4 flex items-center justify-between rounded-lg border border-green-500/20 bg-green-500/5 px-4 py-3">
+                <span className="text-sm text-gray-400">Total Comisiones</span>
+                <span className="text-xl font-bold text-green-400">{formatCurrency(resumen?.totalComisiones || 0)}</span>
+              </div>
+            </Card>
+          </div>
         </div>
 
         {reportData?.porChica && reportData.porChica.length > 0 && (
-          <div className="mt-6">
-            <h3 className="mb-4 text-xl font-bold">💄 Totales por Chica</h3>
+          <div className="mt-8">
+            <h3 className="mb-3 text-base font-semibold text-gray-300 flex items-center gap-2">
+              <span className="inline-block h-1 w-1 rounded-full bg-pink-400" />
+              Totales por Chica
+            </h3>
             <DataTable
               columns={chicaColumns}
               data={reportData.porChica}
@@ -218,9 +265,81 @@ export default function Reportes() {
           </div>
         )}
 
+        {tipoReporte === 'semanal' && (
+          <div className="mt-8">
+            <h3 className="mb-3 text-base font-semibold text-gray-300 flex items-center gap-2">
+              <span className="inline-block h-1 w-1 rounded-full bg-green-400" />
+              Comisiones Semanales por Chica
+            </h3>
+            <Card className="p-6 border border-purple-700/30 bg-gradient-to-b from-purple-900/10 to-transparent">
+              <p className="text-sm text-gray-400 mb-4">{reportData?.periodo || ''} — Desglose diario para pago de comisiones</p>
+
+              {reportData?.comisionesSemanales && reportData.comisionesSemanales.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-700 text-gray-400">
+                        <th className="text-left py-2 pr-3 font-medium">Chica</th>
+                        <th className="text-right py-2 px-2 font-medium">Lun</th>
+                        <th className="text-right py-2 px-2 font-medium">Mar</th>
+                        <th className="text-right py-2 px-2 font-medium">Mie</th>
+                        <th className="text-right py-2 px-2 font-medium">Jue</th>
+                        <th className="text-right py-2 px-2 font-medium">Vie</th>
+                        <th className="text-right py-2 px-2 font-medium">Sab</th>
+                        <th className="text-right py-2 px-2 font-medium">Dom</th>
+                        <th className="text-right py-2 pl-3 font-bold text-purple-300">TOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.comisionesSemanales.map((row) => (
+                        <tr key={row.nombre} className="border-b border-gray-800 hover:bg-gray-800/50">
+                          <td className="py-2.5 pr-3 font-medium text-gray-100">{row.nombre}</td>
+                          <td className="text-right py-2.5 px-2 text-gray-300">{row.lunes ? formatCurrency(row.lunes) : '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-gray-300">{row.martes ? formatCurrency(row.martes) : '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-gray-300">{row.miercoles ? formatCurrency(row.miercoles) : '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-gray-300">{row.jueves ? formatCurrency(row.jueves) : '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-gray-300">{row.viernes ? formatCurrency(row.viernes) : '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-gray-300">{row.sabado ? formatCurrency(row.sabado) : '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-gray-300">{row.domingo ? formatCurrency(row.domingo) : '-'}</td>
+                          <td className="text-right py-2.5 pl-3 font-bold text-green-400">{formatCurrency(row.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-purple-700">
+                        <td className="py-3 pr-3 font-bold text-purple-300">TOTAL</td>
+                        {['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'].map((dia) => (
+                          <td key={dia} className="text-right py-3 px-2 font-semibold text-gray-200">
+                            {formatCurrency(
+                              (reportData.comisionesSemanales || []).reduce(
+                                (sum, r) => sum + ((r as any)[dia] || 0),
+                                0,
+                              ),
+                            )}
+                          </td>
+                        ))}
+                        <td className="text-right py-3 pl-3 font-bold text-xl text-green-400">
+                          {formatCurrency(
+                            (reportData.comisionesSemanales || []).reduce((sum, r) => sum + r.total, 0),
+                          )}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No hay comisiones registradas en esta semana.</p>
+              )}
+            </Card>
+          </div>
+        )}
+
         {reportData?.porCategoria && reportData.porCategoria.length > 0 && (
-          <div className="mt-6">
-            <h3 className="mb-4 text-xl font-bold">🍸 Totales por Categoria</h3>
+          <div className="mt-8">
+            <h3 className="mb-3 text-base font-semibold text-gray-300 flex items-center gap-2">
+              <span className="inline-block h-1 w-1 rounded-full bg-orange-400" />
+              Totales por Categoria
+            </h3>
             <DataTable
               columns={categoriaColumns}
               data={reportData.porCategoria}
@@ -230,31 +349,32 @@ export default function Reportes() {
           </div>
         )}
 
-        <Card className="mt-6 p-6">
-          <h3 className="text-xl font-bold mb-4">Exportar Datos</h3>
-          <div className="flex gap-3">
-            <Button
-              onClick={handleDownloadExcel}
-              disabled={isExporting}
-              variant="secondary"
-            >
-              {isExporting ? '⏳ Procesando...' : '📥 Descargar Excel'}
-            </Button>
-            <Button
-              onClick={handleGeneratePDF}
-              disabled={isExporting}
-            >
-              {isExporting ? '⏳ Procesando...' : '📄 Generar PDF'}
-            </Button>
-            <Button
-              onClick={fetchReports}
-              disabled={isExporting}
-              variant="ghost"
-            >
-              {isExporting ? '⏳ Actualizando...' : '🔄 Actualizar'}
-            </Button>
-          </div>
-        </Card>
+        <div className="mt-8 flex flex-wrap items-center gap-3 rounded-2xl border border-gray-800 bg-gray-900/60 p-4">
+          <span className="mr-auto text-sm font-medium text-gray-400">Exportar reporte</span>
+          <Button
+            onClick={handleDownloadExcel}
+            disabled={isExporting}
+            variant="secondary"
+            size="sm"
+          >
+            {isExporting ? 'Procesando...' : '📥 Excel'}
+          </Button>
+          <Button
+            onClick={handleGeneratePDF}
+            disabled={isExporting}
+            size="sm"
+          >
+            {isExporting ? 'Procesando...' : '📄 PDF'}
+          </Button>
+          <Button
+            onClick={fetchReports}
+            disabled={isExporting}
+            variant="ghost"
+            size="sm"
+          >
+            🔄 Actualizar
+          </Button>
+        </div>
       </div>
     </DashboardLayout>
   )

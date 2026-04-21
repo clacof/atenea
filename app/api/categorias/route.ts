@@ -52,6 +52,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (data.comision === undefined || data.comision < 0) {
+      return NextResponse.json({ error: 'La comisión es requerida y debe ser mayor o igual a 0' }, { status: 400 })
+    }
+
     const categoria = await prisma.categoria.create({
       data: {
         nombre: data.nombre,
@@ -61,6 +65,7 @@ export async function POST(request: NextRequest) {
         precioChica: data.precioChica || null,
         comisionChica: data.comisionChica || null,
         precio: data.precio || null,
+        comision: data.comision,
         recargoCreditoCliente: data.recargoCreditoCliente || null,
         recargoCreditoChica: data.recargoCreditoChica || null,
         soloTransferencia: Boolean(data.soloTransferencia),

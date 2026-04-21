@@ -23,6 +23,7 @@ interface Categoria {
   precioChica?: number
   comisionChica?: number
   precio?: number
+  comision?: number
   recargoCreditoCliente?: number
   recargoCreditoChica?: number
   soloTransferencia?: boolean
@@ -46,6 +47,7 @@ interface FormData {
   precioChica: number | ''
   comisionChica: number | ''
   precio: number | ''
+  comision: number | ''
   recargoCreditoCliente: number | ''
   recargoCreditoChica: number | ''
   soloTransferencia: boolean
@@ -69,6 +71,7 @@ export default function Categorias() {
     precioChica: '',
     comisionChica: '',
     precio: '',
+    comision: '',
     recargoCreditoCliente: '',
     recargoCreditoChica: '',
     soloTransferencia: false,
@@ -120,6 +123,7 @@ export default function Categorias() {
         precioChica: '',
         comisionChica: '',
         precio: '',
+        comision: '',
         recargoCreditoCliente: '',
         recargoCreditoChica: '',
         soloTransferencia: prev.soloTransferencia,
@@ -127,7 +131,7 @@ export default function Categorias() {
     } else {
       setFormData(prev => ({
         ...prev,
-        [name]: ['precioCliente', 'precioChica', 'comisionChica', 'precio', 'recargoCreditoCliente', 'recargoCreditoChica'].includes(name)
+        [name]: ['precioCliente', 'precioChica', 'comisionChica', 'precio', 'comision', 'recargoCreditoCliente', 'recargoCreditoChica'].includes(name)
           ? (value === '' ? '' : Number(value))
           : value,
       }))
@@ -146,20 +150,8 @@ export default function Categorias() {
       errors.nombre = 'El nombre es requerido'
     }
 
-    if (formData.tipo === 'trago') {
-      if (!formData.precioCliente || formData.precioCliente <= 0) {
-        errors.precioCliente = 'Precio cliente debe ser mayor a 0'
-      }
-      if (!formData.precioChica || formData.precioChica <= 0) {
-        errors.precioChica = 'Precio chica debe ser mayor a 0'
-      }
-      if (formData.comisionChica === '' || formData.comisionChica < 0) {
-        errors.comisionChica = 'Comision debe ser mayor o igual a 0'
-      }
-    } else if (formData.tipo === 'botella') {
-      if (!formData.precio || formData.precio <= 0) {
-        errors.precio = 'Precio debe ser mayor a 0'
-      }
+    if (formData.comision === '' || formData.comision < 0) {
+      errors.comision = 'Comisión debe ser mayor o igual a 0'
     }
 
     setFieldErrors(errors)
@@ -175,6 +167,7 @@ export default function Categorias() {
       precioChica: '',
       comisionChica: '',
       precio: '',
+      comision: '',
       recargoCreditoCliente: '',
       recargoCreditoChica: '',
       soloTransferencia: false,
@@ -201,6 +194,7 @@ export default function Categorias() {
       precioChica: categoria.precioChica ?? '',
       comisionChica: categoria.comisionChica ?? '',
       precio: categoria.precio ?? '',
+      comision: categoria.comision ?? '',
       recargoCreditoCliente: categoria.recargoCreditoCliente ?? '',
       recargoCreditoChica: categoria.recargoCreditoChica ?? '',
       soloTransferencia: categoria.soloTransferencia ?? false,
@@ -224,6 +218,7 @@ export default function Categorias() {
         tipo: formData.tipo,
         isAfterhour: formData.isAfterhour,
         soloTransferencia: formData.soloTransferencia,
+        comision: Number(formData.comision),
         recargoCreditoCliente: formData.recargoCreditoCliente ? Number(formData.recargoCreditoCliente) : null,
         recargoCreditoChica: formData.recargoCreditoChica ? Number(formData.recargoCreditoChica) : null,
       }
@@ -391,7 +386,7 @@ export default function Categorias() {
     },
     { key: 'precioCliente', header: 'P. Cliente', className: 'hidden sm:table-cell', cell: (categoria) => formatCurrency(categoria.precioCliente ?? 0) },
     { key: 'precioChica', header: 'P. Chica', className: 'hidden sm:table-cell', cell: (categoria) => formatCurrency(categoria.precioChica ?? 0) },
-    { key: 'comision', header: 'Comision', className: 'hidden md:table-cell', cell: (categoria) => formatCurrency(categoria.comisionChica ?? 0) },
+    { key: 'comision', header: 'Comision', className: 'hidden md:table-cell', cell: (categoria) => formatCurrency(categoria.comision ?? 0) },
     { key: 'estado', header: 'Estado', className: 'hidden sm:table-cell', cell: statusCell },
     { key: 'acciones', header: '', cell: accionesCell },
   ]
@@ -417,6 +412,7 @@ export default function Categorias() {
       ),
     },
     { key: 'precio', header: 'Precio', className: 'hidden sm:table-cell', cell: (categoria) => formatCurrency(categoria.precio ?? 0) },
+    { key: 'comision', header: 'Comision', className: 'hidden md:table-cell', cell: (categoria) => formatCurrency(categoria.comision ?? 0) },
     { key: 'estado', header: 'Estado', className: 'hidden sm:table-cell', cell: statusCell },
     { key: 'acciones', header: '', cell: accionesCell },
   ]
@@ -524,6 +520,18 @@ export default function Categorias() {
               />
               Solo transferencia (ej: Blue Label)
             </label>
+
+            <FormField label="Comisión General" error={fieldErrors.comision}>
+              <Input
+                type="number"
+                name="comision"
+                value={formData.comision}
+                onChange={handleChange}
+                placeholder="0"
+                hasError={Boolean(fieldErrors.comision)}
+                min="0"
+              />
+            </FormField>
 
             <div className="border border-gray-700 rounded-lg p-4 space-y-3">
               <p className="text-sm font-medium text-orange-400">💳 Recargo por pago con credito</p>

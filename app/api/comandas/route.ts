@@ -180,8 +180,12 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      if (categoria.tipo === 'botella') {
-        const adicionales = Number(chicasAdicionalesBotella ?? 0)
+      if (categoria.tipo === 'botella') {        const cantidadChicas = (chica1Id ? 1 : 0) + (chica2Id ? 1 : 0)
+        if (cantidadChicas < 2) {
+          throw Object.assign(new Error('Para botellas se requieren al menos 2 chicas'), {
+            statusCode: 400,
+          })
+        }        const adicionales = Number(chicasAdicionalesBotella ?? 0)
         if (adicionales < 0) {
           throw Object.assign(new Error('La cantidad de chicas adicionales no puede ser negativa'), {
             statusCode: 400,
@@ -218,8 +222,8 @@ export async function POST(request: NextRequest) {
         categoriaTipo: categoria.tipo,
         isAfterhour: categoria.isAfterhour,
         cantidadChicas: (chica1Id ? 1 : 0) + (chica2Id ? 1 : 0),
-        comisionChicaCategoria: categoria.comisionChica ?? 0,
-        comisionBotella: categoria.tipo === 'botella' ? (categoria.comisionChica ?? 0) : null,
+        comisionChicaCategoria: categoria.comision ?? 0,
+        comisionBotella: categoria.comision ?? 0,
         cortesia: cortesia ?? false,
         descuentoMonto: descuentoMonto ?? null,
         descuentoPorcentaje: descuentoPorcentaje ?? null,

@@ -58,6 +58,7 @@ model Categoria {
   precioChica           Int?           // Para tragos
   comisionChica         Int?           // Para tragos
   precio                Int?           // Para botellas
+  comision              Int?           // Comisión general para la categoría
   recargoCreditoCliente Int?           // Recargo por pago credito (cliente)
   recargoCreditoChica   Int?           // Recargo por pago credito (chica)
   soloTransferencia     Boolean        @default(false) // Solo permite pago por transferencia (ej: Blue Label)

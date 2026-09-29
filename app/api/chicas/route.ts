@@ -10,7 +10,6 @@ export async function GET(request: NextRequest) {
 
   try {
     const chicas = await prisma.chica.findMany({
-      where: { activa: true },
       orderBy: { nombre: 'asc' },
     })
 

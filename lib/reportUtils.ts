@@ -68,7 +68,9 @@ export function getCyclesForMonth(year: number, month: number, startHour: number
     if (!cycles.find(c => c.startDate.getTime() === cycle.startDate.getTime())) {
       cycles.push(cycle)
     }
-    current.setDate(current.getDate() + 1)
+    const nextDate = new Date(current)
+    nextDate.setDate(current.getDate() + 1)
+    current = nextDate
   }
 
   return cycles

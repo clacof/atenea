@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
+import { normalizeCommissionSlots } from '@/lib/commission-utils'
 
 function getTodayBounds() {
   const now = new Date()
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
         clienteNombre: { not: null },
       },
       include: {
-        categoria: { select: { nombre: true } },
+        categoria: { select: { nombre: true, tipo: true } },
         chica1: { select: { id: true, nombre: true } },
         chica2: { select: { id: true, nombre: true } },
       },
@@ -61,15 +62,33 @@ export async function GET(request: NextRequest) {
       clienteNombre,
       count: cmds.length,
       subtotal: cmds.reduce((sum, c) => sum + c.precioFinal, 0),
-      comandas: cmds.map((c) => ({
-        id: c.id,
-        hora: c.hora,
-        categoria: c.categoria.nombre,
-        precioFinal: c.precioFinal,
-        chica1: c.chica1?.nombre ?? null,
-        chica2: c.chica2?.nombre ?? null,
-        cortesia: c.cortesia,
-      })),
+      comandas: cmds.map((c) => {
+        const normalized = normalizeCommissionSlots({
+          comisionTotal: c.comisionTotal,
+          comisionChica1: c.comisionChica1,
+          comisionChica2: c.comisionChica2,
+          hasChica1: Boolean(c.chica1Id),
+          hasChica2: Boolean(c.chica2Id),
+          enforceEvenSplit: c.tipoConsumo === 'cliente' && Boolean(c.chica1Id && c.chica2Id),
+        })
+
+        return {
+          id: c.id,
+          hora: c.hora,
+          categoria: c.categoria.nombre,
+          categoriaTipo: c.categoria.tipo,
+          tipoConsumo: c.tipoConsumo,
+          precioFinal: c.precioFinal,
+          chica1: c.chica1?.nombre ?? null,
+          chica2: c.chica2?.nombre ?? null,
+          chica1Liberada: c.chica1Liberada,
+          chica2Liberada: c.chica2Liberada,
+          comisionTotal: c.comisionTotal,
+          comisionChica1: normalized.comisionChica1,
+          comisionChica2: normalized.comisionChica2,
+          cortesia: c.cortesia,
+        }
+      }),
     }))
 
     // Sort naturally by C-number; non-C names go last
@@ -82,8 +101,12 @@ export async function GET(request: NextRequest) {
     // Chica availability: occupied = assigned to any activa comanda today
     const chicasOcupadas = new Map<number, string>() // id → clienteNombre
     for (const cmd of activasHoy) {
-      if (cmd.chica1Id && cmd.clienteNombre) chicasOcupadas.set(cmd.chica1Id, cmd.clienteNombre)
-      if (cmd.chica2Id && cmd.clienteNombre) chicasOcupadas.set(cmd.chica2Id, cmd.clienteNombre)
+      if (cmd.chica1Id && cmd.clienteNombre && !cmd.chica1Liberada) {
+        chicasOcupadas.set(cmd.chica1Id, cmd.clienteNombre)
+      }
+      if (cmd.chica2Id && cmd.clienteNombre && !cmd.chica2Liberada) {
+        chicasOcupadas.set(cmd.chica2Id, cmd.clienteNombre)
+      }
     }
 
     const todasChicas = await prisma.chica.findMany({
@@ -180,20 +203,22 @@ export async function PATCH(request: NextRequest) {
     const freed1 = await prisma.comanda.updateMany({
       where: {
         chica1Id: chicaId,
+        chica1Liberada: false,
         estado: 'activa',
         fecha: { gte: start, lte: end },
       },
-      data: { chica1Id: null, comisionChica1: 0 },
+      data: { chica1Liberada: true },
     })
 
     // Liberar como chica2
     const freed2 = await prisma.comanda.updateMany({
       where: {
         chica2Id: chicaId,
+        chica2Liberada: false,
         estado: 'activa',
         fecha: { gte: start, lte: end },
       },
-      data: { chica2Id: null, comisionChica2: 0 },
+      data: { chica2Liberada: true },
     })
 
     return NextResponse.json({ freed: freed1.count + freed2.count })

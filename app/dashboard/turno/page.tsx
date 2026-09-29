@@ -2,18 +2,26 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import DashboardLayout from '../../../components/DashboardLayout'
 import { getAuthHeaders } from '../../../lib/client-auth'
 import { formatCurrency } from '../../../lib/formatters'
+import { cn } from '@/lib/utils'
+import { normalizeCommissionSlots } from '@/lib/commission-utils'
 
 interface ComandaHistorial {
   id: number
   hora: string
   categoria: string
+  categoriaTipo: 'trago' | 'botella'
   precioFinal: number
   chica1: string | null
   chica2: string | null
+  chica1Liberada?: boolean
+  chica2Liberada?: boolean
+  tipoConsumo: string
   cortesia: boolean
+  comisionTotal: number
+  comisionChica1: number
+  comisionChica2: number
 }
 
 interface ClienteActivo {
@@ -44,6 +52,7 @@ export default function TurnoActivo() {
   const [liberando, setLiberando] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [expandedCliente, setExpandedCliente] = useState<string | null>(null)
+  const [expandedComandas, setExpandedComandas] = useState<Set<number>>(new Set())
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -53,6 +62,7 @@ export default function TurnoActivo() {
         headers: getAuthHeaders(),
       }).then((r) => r.json())
       setTurno(data)
+      setExpandedComandas(new Set())
       setLastRefreshed(new Date())
     } catch (err) {
       console.error('Error cargando turno:', err)
@@ -102,8 +112,34 @@ export default function TurnoActivo() {
 
   const disponiblesCount = turno?.chicas.filter((c) => c.disponible).length ?? 0
 
+  const toggleComandaDetalle = (comandaId: number) => {
+    setExpandedComandas((prev) => {
+      const next = new Set(prev)
+      if (next.has(comandaId)) {
+        next.delete(comandaId)
+      } else {
+        next.add(comandaId)
+      }
+      return next
+    })
+  }
+
+  const getComisionSplit = (cmd: ComandaHistorial) =>
+    normalizeCommissionSlots({
+      comisionTotal: cmd.comisionTotal,
+      comisionChica1: cmd.comisionChica1,
+      comisionChica2: cmd.comisionChica2,
+      hasChica1: Boolean(cmd.chica1),
+      hasChica2: Boolean(cmd.chica2),
+      enforceEvenSplit: cmd.tipoConsumo === 'cliente' && Boolean(cmd.chica1 && cmd.chica2),
+    })
+
   const handleLiberarChica = async (chicaId: number, chicaNombre: string) => {
-    if (!confirm(`Liberar a ${chicaNombre}? Sera removida de las comandas activas donde esta asignada.`))
+    if (
+      !confirm(
+        `Liberar a ${chicaNombre}? Seguirá visible en sus comandas, pero quedara disponible para nuevos clientes.`,
+      )
+    )
       return
 
     try {
@@ -132,8 +168,7 @@ export default function TurnoActivo() {
   const totalActivo = turno?.clientesActivos.reduce((s, c) => s + c.subtotal, 0) ?? 0
 
   return (
-    <DashboardLayout>
-      <div>
+    <div>
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
           <div>
@@ -293,13 +328,14 @@ export default function TurnoActivo() {
                     {/* Card header */}
                     <div className="flex items-center justify-between px-5 py-4">
                       <button
-                        onClick={() =>
-                          setExpandedCliente(
+                        onClick={() => {
+                          const next =
                             expandedCliente === cliente.clienteNombre
                               ? null
-                              : cliente.clienteNombre,
-                          )
-                        }
+                              : cliente.clienteNombre
+                          setExpandedCliente(next)
+                          setExpandedComandas(new Set())
+                        }}
                         className="flex items-center gap-3 text-left flex-1 min-w-0"
                       >
                         <span className="font-mono font-bold text-purple-400 text-xl">
@@ -333,46 +369,169 @@ export default function TurnoActivo() {
                     </div>
 
                     {/* Expandable detail */}
-                    {expandedCliente === cliente.clienteNombre && (
-                      <div className="border-t border-gray-700 px-5 py-3">
-                        <div className="space-y-1">
-                          {cliente.comandas.map((cmd) => (
-                            <div
-                              key={cmd.id}
-                              className="flex justify-between text-sm text-gray-400 py-1.5 border-b border-gray-700/50 last:border-0"
-                            >
-                              <span>
-                                <span className="text-gray-500 mr-2">{cmd.hora}</span>
-                                {cmd.categoria}
-                                {cmd.chica1 && (
-                                  <span className="text-purple-400"> · {cmd.chica1}</span>
-                                )}
-                                {cmd.chica2 && (
-                                  <span className="text-purple-400"> + {cmd.chica2}</span>
-                                )}
-                                {cmd.cortesia && (
-                                  <span className="text-yellow-400 ml-1">(cortesia)</span>
-                                )}
-                              </span>
-                              <span className="text-white ml-4 shrink-0">
-                                {formatCurrency(cmd.precioFinal)}
-                              </span>
+                    {expandedCliente === cliente.clienteNombre && (() => {
+                      const comisionPorChica = new Map<string, number>()
+                      for (const cmd of cliente.comandas) {
+                        const split = getComisionSplit(cmd)
+                        if (cmd.chica1) {
+                          comisionPorChica.set(
+                            cmd.chica1,
+                            (comisionPorChica.get(cmd.chica1) ?? 0) + split.comisionChica1,
+                          )
+                        }
+                        if (cmd.chica2) {
+                          comisionPorChica.set(
+                            cmd.chica2,
+                            (comisionPorChica.get(cmd.chica2) ?? 0) + split.comisionChica2,
+                          )
+                        }
+                      }
+                      const resumen = Array.from(comisionPorChica.entries())
+
+                      return (
+                        <div className="border-t border-gray-700 px-5 py-3 space-y-3">
+                          {resumen.length > 0 && (
+                            <div className="rounded-lg border border-indigo-900/40 bg-indigo-950/20 p-3 text-xs sm:text-sm text-indigo-100">
+                              <p className="mb-2 font-semibold text-indigo-200">Comisiones por chica</p>
+                              <div className="flex flex-wrap gap-2">
+                                {resumen.map(([nombre, total]) => (
+                                  <span
+                                    key={nombre}
+                                    className="rounded-full bg-indigo-500/10 px-3 py-1 text-indigo-100 border border-indigo-500/20"
+                                  >
+                                    {nombre}: <span className="font-semibold">{formatCurrency(total)}</span>
+                                  </span>
+                                ))}
+                              </div>
                             </div>
-                          ))}
+                          )}
+
+                          <div className="space-y-2">
+                            {cliente.comandas.map((cmd) => {
+                              const isExpanded = expandedComandas.has(cmd.id)
+                              const split = getComisionSplit(cmd)
+                              return (
+                                <div
+                                  key={cmd.id}
+                                  className="rounded-xl border border-gray-700/50 bg-slate-900/40"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleComandaDetalle(cmd.id)}
+                                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-gray-200"
+                                  >
+                                    <div>
+                                      <span className="mr-2 text-xs font-mono text-gray-500">{cmd.hora}</span>
+                                      <span className="font-semibold text-white">{cmd.categoria}</span>
+                                        {cmd.chica1 && (
+                                      <span className="text-purple-300 inline-flex items-center gap-2">
+                                        · {cmd.chica1}
+                                        {cmd.chica1Liberada && (
+                                          <span className="rounded-full bg-gray-700/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-200">
+                                            Liberada
+                                          </span>
+                                        )}
+                                      </span>
+                                    )}
+                                    {cmd.chica2 && (
+                                      <span className="text-purple-300 inline-flex items-center gap-2">
+                                        + {cmd.chica2}
+                                        {cmd.chica2Liberada && (
+                                          <span className="rounded-full bg-gray-700/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-200">
+                                            Liberada
+                                          </span>
+                                        )}
+                                      </span>
+                                    )}
+                                      {cmd.cortesia && (
+                                        <span className="ml-2 text-xs uppercase tracking-wide text-amber-300">
+                                          Cortesia
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <span className="font-semibold text-white">
+                                        {formatCurrency(cmd.precioFinal)}
+                                      </span>
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.5"
+                                        className={cn('h-4 w-4 text-gray-400 transition-transform', isExpanded ? 'rotate-180' : '')}
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+                                      </svg>
+                                    </div>
+                                  </button>
+
+                                  {isExpanded && (
+                                    <div className="border-t border-gray-700 px-4 py-3 text-sm text-gray-300">
+                                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
+                                        <span className="text-gray-400">Comision total</span>
+                                        <span className="font-semibold text-purple-300">
+                                          {formatCurrency(cmd.comisionTotal)}
+                                        </span>
+                                      </div>
+                                      <div className="mt-3 space-y-1 text-xs sm:text-sm">
+                                        {cmd.chica1 || cmd.chica2 ? (
+                                          <>
+                                            {cmd.chica1 && (
+                                              <div className="flex items-center justify-between text-purple-200">
+                                                <span className="flex items-center gap-2">
+                                                  {cmd.chica1}
+                                                  {cmd.chica1Liberada && (
+                                                    <span className="rounded bg-gray-700/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-200">
+                                                      Liberada
+                                                    </span>
+                                                  )}
+                                                </span>
+                                                <span className="font-semibold">
+                                                  {formatCurrency(split.comisionChica1)}
+                                                </span>
+                                              </div>
+                                            )}
+                                            {cmd.chica2 && (
+                                              <div className="flex items-center justify-between text-purple-200">
+                                                <span className="flex items-center gap-2">
+                                                  {cmd.chica2}
+                                                  {cmd.chica2Liberada && (
+                                                    <span className="rounded bg-gray-700/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-200">
+                                                      Liberada
+                                                    </span>
+                                                  )}
+                                                </span>
+                                                <span className="font-semibold">
+                                                  {formatCurrency(split.comisionChica2)}
+                                                </span>
+                                              </div>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <p className="text-gray-500">Sin chicas asignadas</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+
+                          <div className="flex justify-between font-semibold text-purple-400 pt-1">
+                            <span>Total abierto</span>
+                            <span>{formatCurrency(cliente.subtotal)}</span>
+                          </div>
                         </div>
-                        <div className="flex justify-between font-semibold text-purple-400 mt-3 pt-3 border-t border-gray-700">
-                          <span>Total</span>
-                          <span>{formatCurrency(cliente.subtotal)}</span>
-                        </div>
-                      </div>
-                    )}
+                      )
+                    })()}
                   </div>
                 ))}
               </div>
             </div>
           </div>
         )}
-      </div>
-    </DashboardLayout>
+    </div>
   )
 }

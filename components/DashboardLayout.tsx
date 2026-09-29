@@ -2,20 +2,25 @@
 
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import Sidebar from '../components/Sidebar'
-import { isSessionExpired, getSessionExpiry, logout } from '../lib/client-auth'
+import Sidebar, { SidebarToggle } from '../components/Sidebar'
+import { isSessionExpired, logout, useAuthStore } from '../store/authSlice'
+import { useUIStore } from '../store'
+import { cn } from '@/lib/utils'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
+  showSidebar?: boolean
 }
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout({ children, showSidebar = true }: DashboardLayoutProps) {
   const router = useRouter()
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sidebarOpen = useUIStore((state) => state.sidebarOpen)
+  const setSidebarOpen = useUIStore((state) => state.setSidebarOpen)
 
   useEffect(() => {
-    const user = localStorage.getItem('user')
-    if (!user) {
+    const isAuthenticated = useAuthStore.getState().isAuthenticated
+    if (!isAuthenticated) {
       router.push('/login')
       return
     }
@@ -25,9 +30,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       return
     }
 
-    const expiry = getSessionExpiry()
-    if (expiry) {
-      const msLeft = expiry - Date.now()
+    const expiresAt = useAuthStore.getState().sessionExpiresAt
+    if (expiresAt) {
+      const msLeft = expiresAt - Date.now()
       timerRef.current = setTimeout(() => {
         logout().then(() => router.push('/login'))
       }, msLeft)
@@ -38,14 +43,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [router])
 
+  const handleSidebarClose = () => setSidebarOpen(false)
+
   return (
-    <div className="flex min-h-screen bg-[radial-gradient(circle_at_top,_rgba(88,28,135,0.18),_transparent_35%),linear-gradient(180deg,_#0f172a_0%,_#020617_100%)] text-white">
-      <Sidebar />
-      <div className="flex-1 px-4 py-6 md:px-8">
-        <div className="mx-auto max-w-7xl">
+    <div className="relative min-h-screen bg-[radial-gradient(circle_at_top,_rgba(88,28,135,0.18),_transparent_35%),linear-gradient(180deg,_#0f172a_0%,_#020617_100%)] text-white">
+      {showSidebar && (
+        <>
+          <Sidebar variant="desktop" />
+          <Sidebar variant="mobile" isOpen={sidebarOpen} onClose={handleSidebarClose} />
+          <SidebarToggle onClick={() => setSidebarOpen(true)} />
+        </>
+      )}
+      <main
+        className={cn(
+          'relative z-0 px-4 pb-12 pt-20 sm:px-6 md:pb-14 md:pt-10 lg:px-12',
+          showSidebar && 'md:ml-64'
+        )}
+        role="main"
+      >
+        <div className="mx-auto w-full max-w-7xl space-y-8">
           {children}
         </div>
-      </div>
+      </main>
     </div>
   )
 }

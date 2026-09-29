@@ -1,124 +1,74 @@
-'use client'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { prisma } from '@/lib/prisma'
+import { verifyToken } from '@/lib/auth'
+import DashboardClient from './DashboardClient'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Button from '../../components/atoms/Button'
-import LoadingState from '../../components/atoms/LoadingState'
-import StatusBadge from '../../components/atoms/StatusBadge'
-import DashboardLayout from '../../components/DashboardLayout'
-import DataTable, { type DataTableColumn } from '../../components/molecules/DataTable'
-import MetricCard from '../../components/molecules/MetricCard'
-import PageHeader from '../../components/molecules/PageHeader'
-import { logout, getAuthHeaders, getStoredUser } from '../../lib/client-auth'
-import { formatCurrency, formatDate } from '../../lib/formatters'
+async function getStats() {
+  const now = new Date()
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
 
-interface User {
-  id: number
-  nombre: string
-  email: string
-  rol: string
+  const [totalVentas, totalComisiones, comandasHoy] = await Promise.all([
+    prisma.comanda.aggregate({
+      where: { fecha: { gte: startOfDay, lte: endOfDay }, estado: { not: 'anulada' } },
+      _sum: { precioFinal: true },
+    }),
+    prisma.comanda.aggregate({
+      where: { fecha: { gte: startOfDay, lte: endOfDay }, estado: { not: 'anulada' } },
+      _sum: { comisionTotal: true },
+    }),
+    prisma.comanda.count({
+      where: { fecha: { gte: startOfDay, lte: endOfDay }, estado: { not: 'anulada' } },
+    }),
+  ])
+
+  return {
+    totalVentas: totalVentas._sum.precioFinal || 0,
+    totalComisiones: totalComisiones._sum.comisionTotal || 0,
+    comandasHoy,
+  }
 }
 
-interface Comanda {
-  id: number
-  fecha: string
-  precioFinal: number
-  comisionTotal: number
-  estado: string
-}
+async function getRecentComandas() {
+  const now = new Date()
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
 
-export default function Dashboard() {
-  const [user, setUser] = useState<User | null>(null)
-  const [comandas, setComandas] = useState<Comanda[]>([])
-  const [stats, setStats] = useState({
-    totalVentas: 0,
-    totalComisiones: 0,
-    comandasHoy: 0,
+  const comandas = await prisma.comanda.findMany({
+    where: { fecha: { gte: startOfDay, lte: endOfDay } },
+    orderBy: { fecha: 'desc' },
+    take: 5,
+    include: { categoria: { select: { nombre: true } } },
   })
-  const router = useRouter()
 
-  useEffect(() => {
-    const currentUser = getStoredUser<User>()
-    if (!currentUser) {
-      router.push('/login')
-      return
-    }
-    setUser(currentUser)
-    
-    fetch('/api/stats', { headers: getAuthHeaders() })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data && typeof data.totalVentas === 'number') {
-          setStats({
-            totalVentas: data.totalVentas,
-            totalComisiones: data.totalComisiones,
-            comandasHoy: data.comandasHoy,
-          })
-        }
-      })
-      .catch((err) => console.error('Error cargando stats:', err))
+  return comandas.map(c => ({
+    ...c,
+    fecha: c.fecha.toISOString(),
+  }))
+}
 
-    fetch('/api/comandas?limit=5', { headers: getAuthHeaders() })
-      .then((r) => r.json())
-      .then((data) => setComandas(Array.isArray(data) ? data : []))
-      .catch((err) => console.error('Error cargando comandas recientes:', err))
-  }, [router])
+export default async function DashboardPage() {
+  const cookieStore = await cookies()
+  const token = cookieStore.get('token')?.value
 
-  const handleLogout = async () => {
-    await logout()
-    router.push('/login')
+  if (!token) {
+    redirect('/login')
   }
 
-  const recentColumns: DataTableColumn<Comanda>[] = [
-    { key: 'id', header: 'ID', cell: (comanda) => comanda.id },
-    { key: 'fecha', header: 'Fecha', cell: (comanda) => formatDate(comanda.fecha) },
-    { key: 'precio', header: 'Precio', cell: (comanda) => formatCurrency(comanda.precioFinal) },
-    { key: 'comision', header: 'Comision', cell: (comanda) => formatCurrency(comanda.comisionTotal) },
-    {
-      key: 'estado',
-      header: 'Estado',
-      cell: (comanda) => (
-        <StatusBadge tone={comanda.estado === 'anulada' ? 'danger' : comanda.estado === 'pagada' ? 'neutral' : 'success'}>
-          {comanda.estado}
-        </StatusBadge>
-      ),
-    },
-  ]
-
+  const user = verifyToken(token)
   if (!user) {
-    return (
-      <DashboardLayout>
-        <LoadingState message="Cargando dashboard..." />
-      </DashboardLayout>
-    )
+    redirect('/login')
   }
 
-  return (
-    <DashboardLayout>
-      <PageHeader
-        title="Dashboard"
-        description={`Bienvenido ${user.nombre}. Resumen operativo del turno actual.`}
-        actions={
-          <>
-            <span className="text-sm text-gray-300">{user.nombre} ({user.rol})</span>
-            <Button variant="danger" onClick={handleLogout}>Salir</Button>
-          </>
-        }
-      />
+  const [stats, comandas] = await Promise.all([getStats(), getRecentComandas()])
 
-      <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-        <MetricCard label="Ventas Hoy" value={formatCurrency(stats.totalVentas)} accent="green" />
-        <MetricCard label="Comisiones Hoy" value={formatCurrency(stats.totalComisiones)} accent="blue" />
-        <MetricCard label="Comandas Hoy" value={stats.comandasHoy} accent="purple" />
-      </div>
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: user.id },
+    select: { nombre: true },
+  })
 
-      <DataTable
-        columns={recentColumns}
-        data={comandas.slice(0, 5)}
-        getRowKey={(comanda) => comanda.id}
-        emptyTitle="No hay comandas recientes"
-        emptyDescription="Cuando se registren ventas, apareceran aqui."
-      />
-    </DashboardLayout>
-  )
+  const userWithName = { ...user, nombre: usuario?.nombre || 'Usuario' }
+
+  return <DashboardClient user={userWithName} stats={stats} comandas={comandas} />
 }

@@ -8,8 +8,6 @@ export interface CommissionInput {
   tipoConsumo: 'cliente' | 'chica'
   categoriaTipo?: 'trago' | 'botella' | null
   isAfterhour?: boolean
-  chicasAdicionalesBotella?: number | null
-  comisionPorChicaBotella?: number | null
   comisionChicaCategoria?: number | null
   comisionBotella?: number | null
   cantidadChicas?: number // Cantidad TOTAL de chicas en la comanda
@@ -18,6 +16,7 @@ export interface CommissionInput {
   descuentoPorcentaje?: number | null
   chica1Id?: number | null
   chica2Id?: number | null
+  chicaRecibeComisionId?: number | null // Para trago: específica quién recibe
   medioPago?: string | null
   recargoCreditoCliente?: number | null
   recargoCreditoChica?: number | null
@@ -33,9 +32,13 @@ export interface CommissionResult {
 
 /**
  * Calcula precio final y comisiones de una comanda.
- *  - Para tragos (tipoConsumo='chica'): aplica comisionChicaCategoria
- *  - Para botellas: la comisión de categoría se divide por la cantidad de chicas
- *  - Pago con credito agrega recargo configurable por categoria
+ * 
+ * Reglas de negocio:
+ * - Para TRAGO + cliente: TODA la comisión a UNA sola chica (chicaRecibeComisionId o chica1Id)
+ * - Para BOTELLA + cliente: La comisión se divide entre TODAS las chicas
+ * - Para tipoConsumo='chica': comisión sin dividir (consumo propio)
+ * - Pago con credito agrega recargo configurable por categoria
+ * 
  * Los montos intermedios se redondean para evitar centavos.
  */
 export function calculateComision(input: CommissionInput): CommissionResult {
@@ -44,8 +47,6 @@ export function calculateComision(input: CommissionInput): CommissionResult {
     tipoConsumo,
     categoriaTipo,
     isAfterhour = false,
-    chicasAdicionalesBotella,
-    comisionPorChicaBotella,
     comisionChicaCategoria,
     comisionBotella,
     cantidadChicas = 1,
@@ -54,6 +55,7 @@ export function calculateComision(input: CommissionInput): CommissionResult {
     descuentoPorcentaje,
     chica1Id,
     chica2Id,
+    chicaRecibeComisionId,
     medioPago,
     recargoCreditoCliente,
     recargoCreditoChica,
@@ -91,22 +93,61 @@ export function calculateComision(input: CommissionInput): CommissionResult {
   }
 
   // Logica de comisiones por categoria y tipo de consumo
-  if (categoriaTipo === 'botella' && tipoConsumo === 'cliente' && !cortesia && precioFinal > 0) {
-    // Botellas: La comisión de categoría se divide por cantidad de chicas
+  if (categoriaTipo === 'trago' && tipoConsumo === 'cliente' && !cortesia && precioFinal > 0) {
+    // Regla de negocio: TRAGOS para cliente NO dan comisión a las chicas
+    comisionTotal = 0
+  } else if (categoriaTipo === 'botella' && tipoConsumo === 'cliente' && !cortesia && precioFinal > 0) {
+    // BOTELLA: La comisión se divide entre TODAS las chicas
     const comisionPorChica = Math.round((comisionBotella ?? comisionChicaCategoria ?? 0) / Math.max(1, cantidadChicas))
     comisionTotal = comisionPorChica * Math.max(1, cantidadChicas)
   } else if (tipoConsumo === 'chica' && !cortesia && precioFinal > 0) {
-    // Tragos para chica: usar comisionChicaCategoria sin dividir
+    // Consumo propio (chica consume): usar comisionChicaCategoria sin dividir
     comisionTotal = Math.round(comisionChicaCategoria ?? 0)
   }
 
-  // Distribuir comision entre dos chicas si corresponde
+  // Distribuir comision entre chica(s)
   if (comisionTotal > 0) {
-    if (chica1Id && chica2Id) {
-      comisionChica1 = Math.round(comisionTotal / 2)
-      comisionChica2 = comisionTotal - comisionChica1
-    } else if (chica1Id) {
-      comisionChica1 = comisionTotal
+    const multipleChicasCliente = tipoConsumo === 'cliente' && cantidadChicas > 1
+
+    if (multipleChicasCliente) {
+      const participantes = [] as Array<'chica1' | 'chica2'>
+      if (chica1Id) participantes.push('chica1')
+      if (chica2Id) participantes.push('chica2')
+
+      if (participantes.length === 0) {
+        comisionChica1 = comisionTotal
+      } else {
+        const base = Math.floor(comisionTotal / participantes.length)
+        let remainder = comisionTotal - base * participantes.length
+
+        const nextValue = () => {
+          const extra = remainder > 0 ? 1 : 0
+          if (remainder > 0) remainder -= 1
+          return base + extra
+        }
+
+        if (participantes.includes('chica1')) {
+          comisionChica1 = nextValue()
+        }
+        if (participantes.includes('chica2')) {
+          comisionChica2 = nextValue()
+        }
+      }
+    } else {
+      const comisionChicaDestino = chicaRecibeComisionId ?? chica1Id ?? chica2Id ?? null
+
+      if (comisionChicaDestino === chica1Id) {
+        comisionChica1 = comisionTotal
+      } else if (comisionChicaDestino === chica2Id) {
+        comisionChica2 = comisionTotal
+      } else if (chica1Id && chica2Id) {
+        comisionChica1 = Math.round(comisionTotal / 2)
+        comisionChica2 = comisionTotal - comisionChica1
+      } else if (chica1Id) {
+        comisionChica1 = comisionTotal
+      } else if (chica2Id) {
+        comisionChica2 = comisionTotal
+      }
     }
   }
 

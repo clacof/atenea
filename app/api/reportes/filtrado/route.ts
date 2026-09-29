@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
       .reduce((sum, c) => sum + c.precioFinal, 0)
 
     // Por categoria
-    const porCategoria: Record<string, any> = {}
+    const porCategoria: Record<string, { cantidad: number; total: number; comision: number }> = {}
     comandas.forEach(cmd => {
       if (!porCategoria[cmd.categoria.nombre]) {
         porCategoria[cmd.categoria.nombre] = { cantidad: 0, total: 0, comision: 0 }
@@ -165,23 +165,21 @@ export async function GET(request: NextRequest) {
     })
 
     // Por chica
-    const porChica: Record<string, any> = {}
+    const porChica: Record<string, { cantidad: number; comision: number }> = {}
     comandas.forEach(cmd => {
       if (cmd.chica1) {
         if (!porChica[cmd.chica1.nombre]) {
-          porChica[cmd.chica1.nombre] = { cantidad: 0, comision: 0, ventas: 0 }
+          porChica[cmd.chica1.nombre] = { cantidad: 0, comision: 0 }
         }
         porChica[cmd.chica1.nombre].cantidad++
         porChica[cmd.chica1.nombre].comision += cmd.comisionChica1 || 0
-        porChica[cmd.chica1.nombre].ventas += cmd.precioFinal / (cmd.chica2 ? 2 : 1)
       }
       if (cmd.chica2) {
         if (!porChica[cmd.chica2.nombre]) {
-          porChica[cmd.chica2.nombre] = { cantidad: 0, comision: 0, ventas: 0 }
+          porChica[cmd.chica2.nombre] = { cantidad: 0, comision: 0 }
         }
         porChica[cmd.chica2.nombre].cantidad++
         porChica[cmd.chica2.nombre].comision += cmd.comisionChica2 || 0
-        porChica[cmd.chica2.nombre].ventas += cmd.precioFinal / 2
       }
     })
 
@@ -198,7 +196,7 @@ export async function GET(request: NextRequest) {
     })
 
     const porMedioPago = Object.entries(porMedioPagoObj)
-      .filter(([_, total]) => total > 0)
+      .filter(([_key, total]) => total > 0)
       .map(([medioPago, total]) => ({
         medioPago,
         total,

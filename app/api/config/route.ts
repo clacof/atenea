@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 
+type ConfigValue = string | number | boolean
+
 const CONFIG_KEYS = [
   'horaCambioAfter',
   'maxChicasBottella',
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest) {
     const configs = await prisma.configGeneral.findMany()
 
     // Convertir a objeto
-    const configObj: Record<string, any> = {}
+    const configObj: Record<string, ConfigValue> = {}
     configs.forEach((config) => {
       // Intentar parsear como numero
       const numValue = Number(config.valor)
@@ -94,7 +96,7 @@ export async function PUT(request: NextRequest) {
 
     // Retornar la configuracion actualizada
     const updatedConfigs = await prisma.configGeneral.findMany()
-    const configObj: Record<string, any> = {}
+    const configObj: Record<string, ConfigValue> = {}
     updatedConfigs.forEach((config) => {
       const numValue = Number(config.valor)
       configObj[config.clave] = isNaN(numValue) ? config.valor : numValue

@@ -6,7 +6,6 @@ import Input from '../../../components/atoms/Input'
 import Select from '../../../components/atoms/Select'
 import LoadingState from '../../../components/atoms/LoadingState'
 import StatusBadge from '../../../components/atoms/StatusBadge'
-import DashboardLayout from '../../../components/DashboardLayout'
 import DataTable, { type DataTableColumn } from '../../../components/molecules/DataTable'
 import FormField from '../../../components/molecules/FormField'
 import PageHeader from '../../../components/molecules/PageHeader'
@@ -332,11 +331,10 @@ export default function Usuarios() {
     },
   ]
 
-  if (loading) return <DashboardLayout><LoadingState /></DashboardLayout>
+  if (loading) return <LoadingState />
 
   return (
-    <DashboardLayout>
-      <div>
+    <div>
         <PageHeader
           title="Usuarios"
           description="Administra las cuentas de acceso al sistema."
@@ -410,13 +408,14 @@ export default function Usuarios() {
               <Select
                 name="rol"
                 value={createForm.rol}
-                onChange={handleCreateChange}
+                onChange={(value) => setCreateForm(prev => ({ ...prev, rol: value }))}
                 hasError={Boolean(createFieldErrors.rol)}
-              >
-                <option value="caja">Cajera</option>
-                <option value="supervisor">Supervisor</option>
-                <option value="admin">Administrador</option>
-              </Select>
+                options={[
+                  { value: 'caja', label: 'Cajera' },
+                  { value: 'supervisor', label: 'Supervisor' },
+                  { value: 'admin', label: 'Administrador' },
+                ]}
+              />
             </FormField>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -473,13 +472,14 @@ export default function Usuarios() {
               <Select
                 name="rol"
                 value={editForm.rol}
-                onChange={handleEditChange}
+                onChange={(value) => setEditForm(prev => ({ ...prev, rol: value }))}
                 hasError={Boolean(editFieldErrors.rol)}
-              >
-                <option value="caja">Cajera</option>
-                <option value="supervisor">Supervisor</option>
-                <option value="admin">Administrador</option>
-              </Select>
+                options={[
+                  { value: 'caja', label: 'Cajera' },
+                  { value: 'supervisor', label: 'Supervisor' },
+                  { value: 'admin', label: 'Administrador' },
+                ]}
+              />
             </FormField>
             <FormField
               label="Nueva contrasena"
@@ -512,7 +512,6 @@ export default function Usuarios() {
             </div>
           </form>
         </Modal>
-      </div>
-    </DashboardLayout>
+    </div>
   )
 }

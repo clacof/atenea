@@ -73,17 +73,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const { id } = await params
-    await prisma.chica.update({
+    await prisma.chica.delete({
       where: { id: Number(id) },
-      data: { activa: false },
     })
 
-    return NextResponse.json({ message: 'Chica desactivada' })
+    return NextResponse.json({ message: 'Chica eliminada' })
   } catch (error) {
     console.error('Error deleting chica:', error)
     if (isPrismaNotFound(error)) {
       return NextResponse.json({ error: 'Chica no encontrada' }, { status: 404 })
     }
-    return NextResponse.json({ error: 'Error al desactivar chica' }, { status: 500 })
+    // Error de restriccion de clave foranea (P2003 = Foreign key constraint failed)
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2003') {
+      return NextResponse.json({ error: 'No se puede eliminar: tiene registros historicos asociados' }, { status: 409 })
+    }
+    return NextResponse.json({ error: 'Error al eliminar chica' }, { status: 500 })
   }
 }

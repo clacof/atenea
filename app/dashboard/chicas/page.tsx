@@ -5,7 +5,6 @@ import Button from '../../../components/atoms/Button'
 import Input from '../../../components/atoms/Input'
 import LoadingState from '../../../components/atoms/LoadingState'
 import StatusBadge from '../../../components/atoms/StatusBadge'
-import DashboardLayout from '../../../components/DashboardLayout'
 import DataTable, { type DataTableColumn } from '../../../components/molecules/DataTable'
 import FormField from '../../../components/molecules/FormField'
 import PageHeader from '../../../components/molecules/PageHeader'
@@ -33,6 +32,8 @@ export default function Chicas() {
   const [chicas, setChicas] = useState<Chica[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingChica, setEditingChica] = useState<Chica | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -125,6 +126,79 @@ export default function Chicas() {
     }
   }
 
+  const handleEdit = (chica: Chica) => {
+    setEditingChica(chica)
+    setFormData({ nombre: chica.nombre })
+    setFieldErrors({})
+    setError('')
+    setShowEditModal(true)
+  }
+
+  const handleDelete = async (chica: Chica) => {
+    if (!confirm(`¿Seguro que deseas eliminar a ${chica.nombre}?`)) {
+      return
+    }
+
+    try {
+      setChangingId(chica.id)
+      const response = await fetch(`/api/chicas/${chica.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'No se pudo eliminar la chica')
+      }
+
+      await fetchChicas()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo eliminar la chica'
+      if (message.includes('registros historicos')) {
+        alert(message)
+      } else {
+        setError(message)
+      }
+    } finally {
+      setChangingId(null)
+    }
+  }
+
+  const handleUpdateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+
+    if (!editingChica || !validateForm()) {
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+      const response = await fetch(`/api/chicas/${editingChica.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ nombre: formData.nombre }),
+      })
+
+      if (!response.ok) {
+        const errData = await response.json()
+        throw new Error(errData.error || 'Error al actualizar la chica')
+      }
+
+      await fetchChicas()
+      setShowEditModal(false)
+      setEditingChica(null)
+      setFormData({ nombre: '' })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al actualizar la chica')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const handleToggleActiva = async (chica: Chica) => {
     const nuevaAccion = chica.activa ? 'marcar como ausente' : 'marcar como activa'
     if (!confirm(`¿Seguro que deseas ${nuevaAccion} a ${chica.nombre}?`)) {
@@ -163,7 +237,7 @@ export default function Chicas() {
       header: 'Estado',
       cell: (chica) => (
         <StatusBadge tone={chica.activa ? 'success' : 'danger'}>
-          {chica.activa ? 'Activa' : 'Inactiva'}
+          {chica.activa ? 'Activa' : 'Ausente'}
         </StatusBadge>
       ),
     },
@@ -171,88 +245,155 @@ export default function Chicas() {
       key: 'acciones',
       header: 'Acciones',
       cell: (chica) => currentUser?.rol === 'admin' ? (
-        <Button
-          size="sm"
-          variant={chica.activa ? 'danger' : 'primary'}
-          disabled={changingId === chica.id}
-          onClick={() => handleToggleActiva(chica)}
-        >
-          {chica.activa ? 'Marcar como ausente' : 'Marcar como activa'}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={changingId === chica.id}
+            onClick={() => handleEdit(chica)}
+          >
+            Editar
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
+            disabled={changingId === chica.id}
+            onClick={() => handleDelete(chica)}
+          >
+            Eliminar
+          </Button>
+          <Button
+            size="sm"
+            variant={chica.activa ? 'danger' : 'primary'}
+            disabled={changingId === chica.id}
+            onClick={() => handleToggleActiva(chica)}
+          >
+            {chica.activa ? 'Ausente' : 'Activar'}
+          </Button>
+        </div>
       ) : (
         <span className="text-xs text-gray-500">Solo admin</span>
       ),
     },
   ]
 
-  if (loading) return <DashboardLayout><LoadingState /></DashboardLayout>
+  if (loading) return <LoadingState />
 
   return (
-    <DashboardLayout>
-      <div>
-        <PageHeader
-          title="Chicas"
-          description="Administra el catalogo de chicas activas e inactivas."
-          actions={<Button onClick={() => setShowModal(true)}>+ Agregar Chica</Button>}
-        />
+    <div>
+      <PageHeader
+        title="Chicas"
+        description="Administra el catalogo de chicas activas e inactivas."
+        actions={<Button onClick={() => setShowModal(true)}>+ Agregar Chica</Button>}
+      />
 
-        <DataTable
-          columns={columns}
-          data={chicas}
-          getRowKey={(chica) => chica.id}
-          emptyTitle="No hay chicas registradas"
-          emptyDescription="Agrega la primera chica para empezar a operar."
-        />
+      <DataTable
+        columns={columns}
+        data={chicas}
+        getRowKey={(chica) => chica.id}
+        emptyTitle="No hay chicas registradas"
+        emptyDescription="Agrega la primera chica para empezar a operar."
+      />
 
-        <Modal
-          isOpen={showModal}
-          onClose={() => {
-            setShowModal(false)
-            setFieldErrors({})
-            setError('')
-          }}
-          title="Agregar Nueva Chica"
-        >
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="bg-red-900 text-red-200 p-3 rounded text-sm">
-                {error}
-              </div>
-            )}
-
-            <FormField label="Nombre" error={fieldErrors.nombre}>
-              <Input
-                type="text"
-                name="nombre"
-                value={formData.nombre}
-                onChange={handleChange}
-                placeholder="Ej: Maria, Juanita, etc"
-                hasError={Boolean(fieldErrors.nombre)}
-              />
-            </FormField>
-
-            <div className="flex gap-3 justify-end pt-4">
-              <Button
-                type="button"
-                onClick={() => {
-                  setShowModal(false)
-                  setFieldErrors({})
-                  setError('')
-                }}
-                variant="secondary"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Guardando...' : 'Agregar Chica'}
-              </Button>
+      <Modal
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false)
+          setFieldErrors({})
+          setError('')
+        }}
+        title="Agregar Nueva Chica"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="bg-red-900 text-red-200 p-3 rounded text-sm">
+              {error}
             </div>
-          </form>
-        </Modal>
-      </div>
-    </DashboardLayout>
+          )}
+
+          <FormField label="Nombre" error={fieldErrors.nombre}>
+            <Input
+              type="text"
+              name="nombre"
+              value={formData.nombre}
+              onChange={handleChange}
+              placeholder="Ej: Maria, Juanita, etc"
+              hasError={Boolean(fieldErrors.nombre)}
+            />
+          </FormField>
+
+          <div className="flex gap-3 justify-end pt-4">
+            <Button
+              type="button"
+              onClick={() => {
+                setShowModal(false)
+                setFieldErrors({})
+                setError('')
+              }}
+              variant="secondary"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Guardando...' : 'Agregar Chica'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false)
+          setEditingChica(null)
+          setFieldErrors({})
+          setError('')
+        }}
+        title="Editar Chica"
+      >
+        <form onSubmit={handleUpdateSubmit} className="space-y-4">
+          {error && (
+            <div className="bg-red-900 text-red-200 p-3 rounded text-sm">
+              {error}
+            </div>
+          )}
+
+          <FormField label="Nombre" error={fieldErrors.nombre}>
+            <Input
+              type="text"
+              name="nombre"
+              value={formData.nombre}
+              onChange={handleChange}
+              placeholder="Ej: Maria, Juanita, etc"
+              hasError={Boolean(fieldErrors.nombre)}
+            />
+          </FormField>
+
+          <div className="flex gap-3 justify-end pt-4">
+            <Button
+              type="button"
+              onClick={() => {
+                setShowEditModal(false)
+                setEditingChica(null)
+                setFieldErrors({})
+                setError('')
+              }}
+              variant="secondary"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
   )
 }

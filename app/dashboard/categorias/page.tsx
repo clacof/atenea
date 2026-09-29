@@ -6,7 +6,6 @@ import Input from '../../../components/atoms/Input'
 import LoadingState from '../../../components/atoms/LoadingState'
 import Select from '../../../components/atoms/Select'
 import StatusBadge from '../../../components/atoms/StatusBadge'
-import DashboardLayout from '../../../components/DashboardLayout'
 import DataTable, { type DataTableColumn } from '../../../components/molecules/DataTable'
 import FormField from '../../../components/molecules/FormField'
 import PageHeader from '../../../components/molecules/PageHeader'
@@ -51,6 +50,20 @@ interface FormData {
   recargoCreditoCliente: number | ''
   recargoCreditoChica: number | ''
   soloTransferencia: boolean
+}
+
+interface CategoriaPayload {
+  nombre: string
+  tipo: TipoCategoria
+  isAfterhour: boolean
+  soloTransferencia: boolean
+  comision: number
+  recargoCreditoCliente: number | null
+  recargoCreditoChica: number | null
+  precioCliente?: number | null
+  precioChica?: number | null
+  comisionChica?: number | null
+  precio?: number | null
 }
 
 export default function Categorias() {
@@ -213,7 +226,7 @@ export default function Categorias() {
     try {
       setIsSubmitting(true)
       
-      const payload: any = {
+      const payload: CategoriaPayload = {
         nombre: formData.nombre,
         tipo: formData.tipo,
         isAfterhour: formData.isAfterhour,
@@ -418,8 +431,7 @@ export default function Categorias() {
   ]
 
   return (
-    <DashboardLayout>
-      <div>
+    <div>
         <PageHeader
           title="Categorias"
           description="Agrupa tragos y botellas con precios y comisiones consistentes."
@@ -481,11 +493,12 @@ export default function Categorias() {
               <Select
                 name="tipo"
                 value={formData.tipo}
-                onChange={handleChange}
-              >
-                <option value="trago">🍹 Trago</option>
-                <option value="botella">🍾 Botella</option>
-              </Select>
+                onChange={(value) => setFormData(prev => ({ ...prev, tipo: value as 'trago' | 'botella' }))}
+                options={[
+                  { value: 'trago', label: '🍹 Trago' },
+                  { value: 'botella', label: '🍾 Botella' },
+                ]}
+              />
             </FormField>
 
             <FormField label="Nombre de Categoria" error={fieldErrors.nombre}>
@@ -634,7 +647,6 @@ export default function Categorias() {
             </div>
           </form>
         </Modal>
-      </div>
-    </DashboardLayout>
+    </div>
   )
 }

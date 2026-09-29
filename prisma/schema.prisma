@@ -84,6 +84,7 @@ model Chica {
   fechaIngreso DateTime  @default(now())
   comandas1    Comanda[] @relation("Chica1")
   comandas2    Comanda[] @relation("Chica2")
+  comisionesRecibidas Comanda[] @relation("ComisionChica")
 }
 
 model Comanda {
@@ -97,6 +98,10 @@ model Comanda {
   chica1              Chica?          @relation("Chica1", fields: [chica1Id], references: [id])
   chica2Id            Int?
   chica2              Chica?          @relation("Chica2", fields: [chica2Id], references: [id])
+  chica1Liberada      Boolean         @default(false)
+  chica2Liberada      Boolean         @default(false)
+  chicaRecibeComisionId Int?            // Para tragos: indica qué chica recibe la comisión completa
+  chicaRecibeComision  Chica?          @relation("ComisionChica", fields: [chicaRecibeComisionId], references: [id])
   precioBase          Int
   precioFinal         Int
   comisionTotal       Int
@@ -120,6 +125,7 @@ model Comanda {
   @@index([chica1Id])
   @@index([chica2Id])
   @@index([clienteNombre])
+  @@index([chicaRecibeComisionId])
 }
 
 model CajaTurno {

@@ -10,6 +10,14 @@ export interface ValidationResult {
   errors: ValidationError[]
 }
 
+export interface ConfigData {
+  maxChicasBottella?: number
+  porcBottella100k?: number
+  porcBottella150kMas?: number
+  horaCambioAfter?: string
+  [key: string]: unknown
+}
+
 /**
  * Validador generico seguidor del patron de composicion
  */
@@ -223,7 +231,7 @@ export class DomainValidator {
   }
 
   // Validar configuracion
-  static validateConfig(data: any): ValidationResult {
+  static validateConfig(data: ConfigData): ValidationResult {
     const validator = new FormValidator()
 
     if (data.maxChicasBottella !== undefined) {

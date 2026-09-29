@@ -5,17 +5,17 @@ import Link from 'next/link'
 import Button from '../../../components/atoms/Button'
 import LoadingState from '../../../components/atoms/LoadingState'
 import StatusBadge from '../../../components/atoms/StatusBadge'
-import DashboardLayout from '../../../components/DashboardLayout'
 import DataTable, { type DataTableColumn } from '../../../components/molecules/DataTable'
 import PageHeader from '../../../components/molecules/PageHeader'
 import { getAuthHeaders } from '../../../lib/client-auth'
 import { formatCurrency, formatDate } from '../../../lib/formatters'
+import { normalizeCommissionSlots } from '@/lib/commission-utils'
 
 interface Comanda {
   id: number
   fecha: string
   hora: string
-  categoria: { nombre: string }
+  categoria: { nombre: string; tipo: 'trago' | 'botella' }
   tipoConsumo: string
   clienteNombre: string | null
   chica1?: { nombre: string } | undefined
@@ -23,8 +23,11 @@ interface Comanda {
   precioBase: number
   precioFinal: number
   comisionTotal: number
+  comisionChica1?: number | null
+  comisionChica2?: number | null
   medioPago: string
   estado: string
+  cortesia: boolean
   usuario: { nombre: string }
 }
 
@@ -35,6 +38,76 @@ export default function Comandas() {
   const [updateError, setUpdateError] = useState('')
   const [filtroCliente, setFiltroCliente] = useState('')
   const [vistaAgrupada, setVistaAgrupada] = useState(false)
+
+  const getChicaEntries = (comanda: Comanda) => {
+    const split = normalizeCommissionSlots({
+      comisionTotal: comanda.comisionTotal,
+      comisionChica1: comanda.comisionChica1,
+      comisionChica2: comanda.comisionChica2,
+      hasChica1: Boolean(comanda.chica1?.nombre),
+      hasChica2: Boolean(comanda.chica2?.nombre),
+      enforceEvenSplit: comanda.tipoConsumo === 'cliente' && Boolean(comanda.chica1?.nombre && comanda.chica2?.nombre),
+    })
+
+    const chicas = [] as { nombre: string; comision: number }[]
+    if (comanda.chica1?.nombre) {
+      chicas.push({ nombre: comanda.chica1.nombre, comision: split.comisionChica1 })
+    }
+    if (comanda.chica2?.nombre) {
+      chicas.push({ nombre: comanda.chica2.nombre, comision: split.comisionChica2 })
+    }
+    return chicas
+  }
+
+  const renderDetalleComanda = (comanda: Comanda) => {
+    const chicas = getChicaEntries(comanda)
+
+    return (
+      <div className="space-y-3 text-sm text-gray-200">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
+          <span>
+            <span className="uppercase tracking-wide">Estado:</span> {comanda.estado}
+          </span>
+          <span>
+            Medio de pago: <span className="font-semibold text-white">{comanda.medioPago}</span>
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
+          <span>Tipo consumo: {comanda.tipoConsumo}</span>
+          {comanda.cortesia && <span className="text-amber-300 font-semibold">Cortesía</span>}
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-400">Comisión total</span>
+          <span className="font-semibold text-purple-300">{formatCurrency(comanda.comisionTotal)}</span>
+        </div>
+        <div className="rounded-lg border border-white/5 bg-gray-900/40 p-3">
+          <p className="text-xs uppercase tracking-wide text-gray-400">Chicas asignadas</p>
+          {chicas.length > 0 ? (
+            <div className="mt-2 space-y-1 text-sm">
+              {chicas.map((chica) => (
+                <div key={chica.nombre} className="flex items-center justify-between text-purple-100">
+                  <span>{chica.nombre}</span>
+                  <span className="font-semibold">{formatCurrency(chica.comision)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-gray-500">Sin chicas asignadas</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const getComisionesPorChica = (items: Comanda[]) => {
+    const resumen = new Map<string, number>()
+    items.forEach((cmd) => {
+      getChicaEntries(cmd).forEach(({ nombre, comision }) => {
+        resumen.set(nombre, (resumen.get(nombre) ?? 0) + comision)
+      })
+    })
+    return Array.from(resumen.entries())
+  }
 
   const fetchComandas = () => {
     fetch('/api/comandas', {
@@ -138,7 +211,10 @@ export default function Comandas() {
             <Button
               size="sm"
               disabled={updatingId === comanda.id}
-              onClick={() => handleEstadoChange(comanda.id, 'pagada')}
+              onClick={(event) => {
+                event.stopPropagation()
+                handleEstadoChange(comanda.id, 'pagada')
+              }}
             >
               Pagar
             </Button>
@@ -146,7 +222,10 @@ export default function Comandas() {
               size="sm"
               variant="danger"
               disabled={updatingId === comanda.id}
-              onClick={() => handleEstadoChange(comanda.id, 'anulada')}
+              onClick={(event) => {
+                event.stopPropagation()
+                handleEstadoChange(comanda.id, 'anulada')
+              }}
             >
               Anular
             </Button>
@@ -158,10 +237,10 @@ export default function Comandas() {
     },
   ]
 
-  if (loading) return <DashboardLayout><LoadingState /></DashboardLayout>
+  if (loading) return <LoadingState />
 
   return (
-    <DashboardLayout>
+    <div className="space-y-6">
       <PageHeader
         title="Comandas"
         description="Listado operativo de ventas registradas y su estado actual."
@@ -201,26 +280,42 @@ export default function Comandas() {
         <div className="space-y-6">
           {grupos.length === 0 ? (
             <p className="text-gray-400">Sin resultados.</p>
-          ) : grupos.map(([clienteKey, grupo]) => (
-            <div key={clienteKey} className="rounded-lg border border-gray-700 bg-gray-800">
-              <div className="flex items-center justify-between rounded-t-lg bg-gray-700 px-4 py-3">
-                <span className="font-semibold text-white">{clienteKey}</span>
-                <div className="flex gap-4 text-sm text-gray-300">
-                  <span>{grupo.comandas.length} comanda{grupo.comandas.length !== 1 ? 's' : ''}</span>
-                  <span>Total: <span className="text-green-400 font-medium">{formatCurrency(grupo.total)}</span></span>
-                  <span>Comision: <span className="text-blue-400 font-medium">{formatCurrency(grupo.comision)}</span></span>
+          ) : grupos.map(([clienteKey, grupo]) => {
+            const resumenChicas = getComisionesPorChica(grupo.comandas)
+            return (
+              <div key={clienteKey} className="rounded-lg border border-gray-700 bg-gray-800">
+                <div className="flex items-center justify-between rounded-t-lg bg-gray-700 px-4 py-3">
+                  <span className="font-semibold text-white">{clienteKey}</span>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-300">
+                    <span>{grupo.comandas.length} comanda{grupo.comandas.length !== 1 ? 's' : ''}</span>
+                    <span>Total: <span className="text-green-400 font-medium">{formatCurrency(grupo.total)}</span></span>
+                    <span>Comision: <span className="text-blue-400 font-medium">{formatCurrency(grupo.comision)}</span></span>
+                  </div>
+                </div>
+                {resumenChicas.length > 0 && (
+                  <div className="border-t border-gray-700 bg-gray-900/40 px-4 py-3 text-sm text-gray-200">
+                    <p className="text-xs uppercase tracking-wide text-gray-400 mb-2">Comisiones por chica</p>
+                    <div className="flex flex-wrap gap-2">
+                      {resumenChicas.map(([nombre, total]) => (
+                        <span key={nombre} className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-indigo-100">
+                          {nombre}: <span className="font-semibold">{formatCurrency(total)}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <DataTable
+                    columns={columns}
+                    data={grupo.comandas}
+                    getRowKey={(c) => c.id}
+                    emptyTitle="Sin comandas"
+                    renderExpanded={renderDetalleComanda}
+                  />
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <DataTable
-                  columns={columns}
-                  data={grupo.comandas}
-                  getRowKey={(c) => c.id}
-                  emptyTitle="Sin comandas"
-                />
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         /* ── Vista lista normal ───────────────────────────────── */
@@ -230,8 +325,9 @@ export default function Comandas() {
           getRowKey={(comanda) => comanda.id}
           emptyTitle="No hay comandas registradas"
           emptyDescription="Las comandas creadas apareceran en este tablero."
+          renderExpanded={renderDetalleComanda}
         />
       )}
-    </DashboardLayout>
+    </div>
   )
 }

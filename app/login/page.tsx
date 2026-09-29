@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation'
 import { FormValidator } from '../../lib/validations'
 import FormError from '../../components/FormError'
 import {
-  setSessionExpiry,
   getRememberedEmail,
   setRememberedEmail,
   clearRememberedEmail,
 } from '../../lib/client-auth'
+import { useAuthStore } from '../../store'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -67,9 +67,8 @@ export default function Login() {
       }
 
       const data = await response.json()
-      // Token is stored in httpOnly cookie by the server — only store non-sensitive user info
-      localStorage.setItem('user', JSON.stringify(data.user))
-      setSessionExpiry(data.expiresAt)
+      // Store user in Zustand (persisted to localStorage automatically)
+      useAuthStore.getState().setUser(data.user, data.expiresAt)
       if (rememberMe) setRememberedEmail(email)
       else clearRememberedEmail()
       router.push('/dashboard')

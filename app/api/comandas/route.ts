@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
       tipoConsumo,
       chica1Id,
       chica2Id,
+      chicaRecibeComisionId,
       chicasAdicionalesBotella,
       descuentoPorcentaje,
       descuentoMonto,
@@ -137,7 +138,10 @@ export async function POST(request: NextRequest) {
           where: {
             estado: 'activa',
             fecha: { gte: start, lte: end },
-            OR: [{ chica1Id: id }, { chica2Id: id }],
+            OR: [
+              { AND: [{ chica1Id: id }, { chica1Liberada: false }] },
+              { AND: [{ chica2Id: id }, { chica2Liberada: false }] },
+            ],
           },
           select: { clienteNombre: true },
         })
@@ -163,13 +167,19 @@ export async function POST(request: NextRequest) {
           estado: 'activa',
           fecha: { gte: start, lte: end },
         },
-        select: { chica1Id: true, chica2Id: true, clienteNombre: true },
+        select: {
+          chica1Id: true,
+          chica2Id: true,
+          chica1Liberada: true,
+          chica2Liberada: true,
+          clienteNombre: true,
+        },
       })
       const ocupadasPorOtroCliente = new Set<number>()
       for (const item of ocupadasHoy) {
         if (item.clienteNombre === clienteNombreSanitized) continue
-        if (item.chica1Id) ocupadasPorOtroCliente.add(item.chica1Id)
-        if (item.chica2Id) ocupadasPorOtroCliente.add(item.chica2Id)
+        if (item.chica1Id && !item.chica1Liberada) ocupadasPorOtroCliente.add(item.chica1Id)
+        if (item.chica2Id && !item.chica2Liberada) ocupadasPorOtroCliente.add(item.chica2Id)
       }
       const chicasDisponiblesCount = await tx.chica.count({
         where: {
@@ -180,12 +190,14 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      if (categoria.tipo === 'botella') {        const cantidadChicas = (chica1Id ? 1 : 0) + (chica2Id ? 1 : 0)
+      if (categoria.tipo === 'botella') {
+        const cantidadChicas = (chica1Id ? 1 : 0) + (chica2Id ? 1 : 0)
         if (cantidadChicas < 2) {
           throw Object.assign(new Error('Para botellas se requieren al menos 2 chicas'), {
             statusCode: 400,
           })
-        }        const adicionales = Number(chicasAdicionalesBotella ?? 0)
+        }
+        const adicionales = Number(chicasAdicionalesBotella ?? 0)
         if (adicionales < 0) {
           throw Object.assign(new Error('La cantidad de chicas adicionales no puede ser negativa'), {
             statusCode: 400,
@@ -202,6 +214,16 @@ export async function POST(request: NextRequest) {
             new Error(`Solo hay ${chicasDisponiblesCount} chicas disponibles para acompanar`),
             { statusCode: 409 },
           )
+        }
+      }
+
+      // Validar TRAGO + cliente: solo 1 chica puede recibir comisión
+      if (categoria.tipo === 'trago' && tipoConsumo === 'cliente') {
+        const cantidadChicas = (chica1Id ? 1 : 0) + (chica2Id ? 1 : 0)
+        if (cantidadChicas > 1) {
+          throw Object.assign(new Error('Para tragos solo una chica recibe la comisión'), {
+            statusCode: 400,
+          })
         }
       }
 
@@ -222,13 +244,14 @@ export async function POST(request: NextRequest) {
         categoriaTipo: categoria.tipo,
         isAfterhour: categoria.isAfterhour,
         cantidadChicas: (chica1Id ? 1 : 0) + (chica2Id ? 1 : 0),
-        comisionChicaCategoria: categoria.comision ?? 0,
+        comisionChicaCategoria: categoria.comisionChica ?? 0,
         comisionBotella: categoria.comision ?? 0,
         cortesia: cortesia ?? false,
         descuentoMonto: descuentoMonto ?? null,
         descuentoPorcentaje: descuentoPorcentaje ?? null,
         chica1Id: chica1Id ?? null,
         chica2Id: chica2Id ?? null,
+        chicaRecibeComisionId: chicaRecibeComisionId ?? chica1Id ?? null,
         medioPago,
         recargoCreditoCliente: categoria.recargoCreditoCliente ?? null,
         recargoCreditoChica: categoria.recargoCreditoChica ?? null,
@@ -242,6 +265,7 @@ export async function POST(request: NextRequest) {
           tipoConsumo,
           chica1Id: chica1Id ?? null,
           chica2Id: chica2Id ?? null,
+          chicaRecibeComisionId: categoria.tipo === 'trago' ? null : (chicaRecibeComisionId ?? chica1Id ?? null),
           precioBase,
           precioFinal,
           comisionTotal,

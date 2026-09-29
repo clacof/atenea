@@ -5,15 +5,14 @@ import { useRouter } from 'next/navigation'
 import Button from '../../../components/atoms/Button'
 import Input from '../../../components/atoms/Input'
 import LoadingState from '../../../components/atoms/LoadingState'
-import DashboardLayout from '../../../components/DashboardLayout'
 import FormField from '../../../components/molecules/FormField'
 import PageHeader from '../../../components/molecules/PageHeader'
 import ConfigSection from '../../../components/organisms/config/ConfigSection'
 import Modal from '../../../components/Modal'
 import { getAuthHeaders } from '../../../lib/client-auth'
-import { DomainValidator } from '../../../lib/validations'
+import { DomainValidator, type ConfigData as ConfigDataType } from '../../../lib/validations'
 
-interface ConfigData {
+interface ConfigData extends ConfigDataType {
   horaCambioAfter: string
   maxChicasBottella: number
   porcBottella100k: number
@@ -126,8 +125,7 @@ export default function Configuracion() {
   }
 
   return (
-    <DashboardLayout>
-      <div>
+    <div>
         <PageHeader
           title="Configuracion General"
           description="Centraliza reglas operativas, porcentajes y accesos administrativos."
@@ -346,7 +344,6 @@ export default function Configuracion() {
             </div>
           </div>
         </Modal>
-      </div>
-    </DashboardLayout>
+    </div>
   )
 }

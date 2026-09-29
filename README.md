@@ -65,9 +65,16 @@ npm run db:seed
 
 ## Documentacion
 
-- Guia completa: DOCUMENTATION.md
-- Arranque rapido: QUICK-START.md
-- Electron desktop: ELECTRON-GUIDE.md
-- Estado frontend: FRONTEND_STATUS.md
-- PWA: PWA-GUIDE.md y PWA-CHECKLIST.md
-- Compartir por tunnel: VSCODE-TUNNEL.md
+Documentación completa basada en el marco [Diátaxis](https://diataxis.fr/):
+
+### Guia rapida
+- [docs/README.md](docs/README.md) - Índice principal
+- [docs/tutorials/01-inicio-operador.md](docs/tutorials/01-inicio-operador.md) - Tutorial para operadores
+- [docs/tutorials/02-configuracion-inicial.md](docs/tutorials/02-configuracion-inicial.md) - Setup inicial
+
+### Documentacion existente
+- DOCUMENTATION.md - Documentación técnica legacy
+- QUICK-START.md - Arranque rápido legacy
+- ELECTRON-GUIDE.md - Electron desktop
+- PWA-GUIDE.md / PWA-CHECKLIST.md - PWA
+- VSCODE-TUNNEL.md - Compartir por tunnel

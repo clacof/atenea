@@ -196,6 +196,9 @@ function NuevaComandaContent() {
         clienteNombre: `C${turnoData?.siguienteNumeroCliente ?? 1}`,
         chica1Id: '',
         chica2Id: '',
+        cortesia: false,
+        descuentoPorcentaje: '',
+        descuentoMonto: '',
       }))
       return
     }
@@ -206,6 +209,9 @@ function NuevaComandaContent() {
       clienteNombre: '',
       chica1Id: '',
       chica2Id: '',
+      cortesia: false,
+      descuentoPorcentaje: '',
+      descuentoMonto: '',
     }))
   }
 
@@ -309,6 +315,8 @@ function NuevaComandaContent() {
     disponibles.length,
     turnoData?.config.maxChicasBottella ?? disponibles.length,
   )
+  const selectBaseClass =
+    'w-full rounded border border-gray-600 bg-gray-700 py-2.5 pl-3 pr-10 leading-6 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-purple-500/40'
 
   return (
     <DashboardLayout>
@@ -376,7 +384,7 @@ function NuevaComandaContent() {
                       tipoConsumo: chicasDelCliente.length > 0 ? 'chica' : prev.tipoConsumo,
                     }))
                   }}
-                  className="w-full p-2 bg-gray-700 text-white rounded"
+                  className={selectBaseClass}
                 >
                   <option value="">Seleccionar cliente</option>
                   {(turnoData?.clientesActivos ?? []).map((cliente) => {
@@ -425,7 +433,7 @@ function NuevaComandaContent() {
                   setFieldErrors({ ...fieldErrors, categoriaId: '' })
                 }
               }}
-              className={`w-full p-2 bg-gray-700 text-white rounded ${
+              className={`${selectBaseClass} ${
                 fieldErrors.categoriaId ? 'border-2 border-red-500' : ''
               }`}
             >
@@ -467,7 +475,7 @@ function NuevaComandaContent() {
             </div>
           </div>
 
-          {(formData.tipoConsumo === 'chica' || 
+          {((formData.tipoConsumo === 'chica' && categorias.find((c) => c.id === Number(formData.categoriaId))?.tipo !== 'trago') || 
             (formData.tipoConsumo === 'cliente' && categorias.find((c) => c.id === Number(formData.categoriaId))?.tipo === 'botella')) && (
             <div className="bg-gray-800 p-6 rounded-lg space-y-4">
               <p className="text-xs text-gray-400">
@@ -490,7 +498,7 @@ function NuevaComandaContent() {
                       setFieldErrors({ ...fieldErrors, chica1Id: '' })
                     }
                   }}
-                  className={`w-full p-2 bg-gray-700 text-white rounded ${
+                  className={`${selectBaseClass} ${
                     fieldErrors.chica1Id ? 'border-2 border-red-500' : ''
                   }`}
                 >
@@ -512,7 +520,7 @@ function NuevaComandaContent() {
                   name="chica2Id"
                   value={formData.chica2Id}
                   onChange={handleChange}
-                  className="w-full p-2 bg-gray-700 text-white rounded"
+                  className={selectBaseClass}
                 >
                   <option value="">Ninguna</option>
                   {disponibles
@@ -589,7 +597,7 @@ function NuevaComandaContent() {
                         }
                       }}
                       disabled={esSoloTransferencia}
-                      className={`w-full p-2 bg-gray-700 text-white rounded ${
+                      className={`${selectBaseClass} ${
                         fieldErrors.medioPago ? 'border-2 border-red-500' : ''
                       } ${esSoloTransferencia ? 'opacity-60' : ''}`}
                     >

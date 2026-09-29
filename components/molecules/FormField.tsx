@@ -10,8 +10,10 @@ interface FormFieldProps {
 
 export default function FormField({ label, error, hint, children }: FormFieldProps) {
   return (
-    <div>
-      <label className="mb-2 block text-sm font-medium text-gray-200">{label}</label>
+    <div className="flex flex-col gap-1">
+      <label className="text-sm font-medium text-gray-200">
+        {label}
+      </label>
       {children}
       {hint ? <p className="mt-2 text-xs text-gray-500">{hint}</p> : null}
       <FormError message={error} />

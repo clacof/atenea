@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -51,26 +52,22 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
-        <PWAInstaller />
+        <Script
+          id="pwa-service-worker"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/service-worker.js').then((reg) => {
+                  console.log('[PWA] Service Worker registrado:', reg);
+                }).catch((err) => {
+                  console.error('[PWA] Error registrando Service Worker:', err);
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
-  );
-}
-
-function PWAInstaller() {
-  return (
-    <script
-      dangerouslySetInnerHTML={{
-        __html: `
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/service-worker.js').then((reg) => {
-              console.log('[PWA] Service Worker registrado:', reg);
-            }).catch((err) => {
-              console.error('[PWA] Error registrando Service Worker:', err);
-            });
-          }
-        `,
-      }}
-    />
   );
 }

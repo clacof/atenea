@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
+import { can } from '@/lib/permissions'
+import { audit } from '@/lib/audit'
+import { categoriaCreateSchema, parseBody } from '@/lib/schemas'
 
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request)
@@ -29,33 +32,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const user = getUserFromRequest(request)
-  if (!user || !['admin', 'supervisor'].includes(user.rol)) {
+  if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
+  if (!can(user.rol, 'categorias.editar')) {
+    return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
+  }
+
+  const { data, response } = await parseBody(request, categoriaCreateSchema)
+  if (response) return response
 
   try {
-    const data = await request.json()
-    
-    // Validacion basica
-    if (!data.nombre || !data.tipo) {
-      return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 })
-    }
-
-    // Validar segun el tipo
-    if (data.tipo === 'trago') {
-      if (!data.precioCliente || !data.precioChica || data.comisionChica === undefined) {
-        return NextResponse.json({ error: 'Para tragos se requieren precioCliente, precioChica y comisionChica' }, { status: 400 })
-      }
-    } else if (data.tipo === 'botella') {
-      if (!data.precio) {
-        return NextResponse.json({ error: 'Para botellas se requiere precio' }, { status: 400 })
-      }
-    }
-
-    if (data.comision === undefined || data.comision < 0) {
-      return NextResponse.json({ error: 'La comisión es requerida y debe ser mayor o igual a 0' }, { status: 400 })
-    }
-
     const categoria = await prisma.categoria.create({
       data: {
         nombre: data.nombre,
@@ -71,6 +58,8 @@ export async function POST(request: NextRequest) {
         soloTransferencia: Boolean(data.soloTransferencia),
       },
     })
+
+    audit({ user, accion: 'CREAR', tabla: 'Categoria', registroId: categoria.id, detalles: { nombre: categoria.nombre } })
 
     return NextResponse.json(categoria, { status: 201 })
   } catch (error) {

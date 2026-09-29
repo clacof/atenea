@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { isPrismaNotFound } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
+import { can } from '@/lib/permissions'
+import { audit } from '@/lib/audit'
+import { comandaEstadoSchema, parseBody, parseId } from '@/lib/schemas'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -42,17 +45,23 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
-  try {
-    const { id } = await params
-    const data = await request.json()
-    const { estado } = data
+  const id = parseId((await params).id)
+  if (!id) {
+    return NextResponse.json({ error: 'ID invalido' }, { status: 400 })
+  }
 
-    if (!['activa', 'pagada', 'anulada'].includes(estado)) {
-      return NextResponse.json({ error: 'Estado invalido' }, { status: 400 })
+  const { data, response } = await parseBody(request, comandaEstadoSchema)
+  if (response) return response
+  const { estado } = data
+
+  try {
+    const anterior = await prisma.comanda.findUnique({ where: { id }, select: { estado: true } })
+    if (!anterior) {
+      return NextResponse.json({ error: 'Comanda no encontrada' }, { status: 404 })
     }
 
     const comanda = await prisma.comanda.update({
-      where: { id: Number(id) },
+      where: { id },
       data: { estado },
       include: {
         categoria: true,
@@ -61,6 +70,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         usuario: { select: { nombre: true } },
       },
     })
+
+    if (anterior.estado !== estado) {
+      audit({
+        user,
+        accion: estado === 'anulada' ? 'ANULAR' : 'CAMBIO_ESTADO',
+        tabla: 'Comanda',
+        registroId: id,
+        detalles: {
+          estado: [anterior.estado, estado],
+          cliente: comanda.clienteNombre,
+          precioFinal: comanda.precioFinal,
+        },
+      })
+    }
 
     return NextResponse.json(comanda)
   } catch (error) {
@@ -74,15 +97,28 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const user = getUserFromRequest(request)
-  if (!user || !['admin', 'supervisor'].includes(user.rol)) {
+  if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+  if (!can(user.rol, 'comandas.anular')) {
+    return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
 
   try {
-    const { id } = await params
-    await prisma.comanda.update({
-      where: { id: Number(id) },
+    const id = parseId((await params).id)
+    if (!id) {
+      return NextResponse.json({ error: 'ID invalido' }, { status: 400 })
+    }
+    const comanda = await prisma.comanda.update({
+      where: { id },
       data: { estado: 'anulada' },
+    })
+    audit({
+      user,
+      accion: 'ANULAR',
+      tabla: 'Comanda',
+      registroId: id,
+      detalles: { cliente: comanda.clienteNombre, precioFinal: comanda.precioFinal },
     })
 
     return NextResponse.json({ message: 'Comanda anulada' })

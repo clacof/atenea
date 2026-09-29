@@ -61,7 +61,7 @@ npm run db:seed
 - Reportes: GET /api/reportes
 - Config: GET/PUT /api/config
 - Operativos: GET /api/stats, GET /api/health
-- Utilidad dev: POST /api/setup, POST /api/seed
+- Utilidad dev: POST /api/setup, POST /api/seed (borran toda la base; solo fuera de produccion y con `ALLOW_DB_RESET=1`)
 
 ## Documentacion
 

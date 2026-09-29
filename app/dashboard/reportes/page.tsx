@@ -9,7 +9,15 @@ import MetricCard from '../../../components/molecules/MetricCard'
 import PageHeader from '../../../components/molecules/PageHeader'
 import ReportFilters from '../../../components/organisms/reportes/ReportFilters'
 import { getAuthHeaders } from '../../../lib/client-auth'
-import { downloadFile, generateExcel, generatePDF, type ExportData } from '../../../lib/exportUtils'
+import {
+  downloadFile,
+  generateExcel,
+  generateLiquidacionCSV,
+  generateLiquidacionPDF,
+  generatePDF,
+  type ExportData,
+} from '../../../lib/exportUtils'
+import { notify } from '../../../lib/feedback'
 import { formatCurrency, formatPercentage } from '../../../lib/formatters'
 
 interface ComisionSemanal {
@@ -37,7 +45,7 @@ interface ReportData {
     promedioPorComanda: number
   }
   porMedioPago: Array<{ medioPago: string; total: number; porcentaje: number }>
-  porChica?: Array<{ nombre: string; cantidad: number; comision: number }>
+  porChica?: Array<{ nombre: string; cantidad: number; comision: number; ventas: number }>
   porCategoria?: Array<{ nombre: string; cantidad: number; total: number; comision: number }>
   comisionesSemanales?: ComisionSemanal[]
 }
@@ -122,10 +130,27 @@ export default function Reportes() {
     { key: 'porcentaje', header: 'Porcentaje', cell: (item) => formatPercentage(item.porcentaje) },
   ]
 
+  const totalComisionChicas = (reportData?.porChica ?? []).reduce((sum, c) => sum + c.comision, 0)
   const chicaColumns: DataTableColumn<NonNullable<ReportData['porChica']>[number]>[] = [
-    { key: 'nombre', header: 'Chica', cell: (item) => item.nombre },
+    {
+      key: 'rank',
+      header: '#',
+      essential: true,
+      className: 'w-12 text-gray-400',
+      cell: (item) => {
+        const pos = (reportData?.porChica ?? []).indexOf(item) + 1
+        return pos <= 3 ? ['🥇', '🥈', '🥉'][pos - 1] : pos
+      },
+    },
+    { key: 'nombre', header: 'Chica', essential: true, cell: (item) => item.nombre },
     { key: 'cantidad', header: 'Comandas', cell: (item) => item.cantidad },
-    { key: 'comision', header: 'Comision', cell: (item) => formatCurrency(item.comision) },
+    { key: 'ventas', header: 'Consumo generado', cell: (item) => formatCurrency(item.ventas ?? 0) },
+    { key: 'comision', header: 'Comision', essential: true, cell: (item) => formatCurrency(item.comision) },
+    {
+      key: 'participacion',
+      header: '% comisiones',
+      cell: (item) => formatPercentage(totalComisionChicas > 0 ? (item.comision / totalComisionChicas) * 100 : 0),
+    },
   ]
 
   const categoriaColumns: DataTableColumn<NonNullable<ReportData['porCategoria']>[number]>[] = [
@@ -167,8 +192,32 @@ export default function Reportes() {
     }
   }
 
+  const handleLiquidacion = async (formato: 'csv' | 'pdf') => {
+    if (!reportData?.porChica?.length) {
+      notify.info('No hay comisiones en este periodo')
+      return
+    }
+
+    setIsExporting(true)
+    try {
+      const input = {
+        periodo: reportData.periodo,
+        porChica: reportData.porChica,
+        comisionesSemanales: reportData.comisionesSemanales,
+      }
+      const blob = formato === 'csv' ? generateLiquidacionCSV(input) : await generateLiquidacionPDF(input)
+      downloadFile(blob, `liquidacion_${getReportSuffix()}.${formato}`)
+    } catch (exportError) {
+      console.error('Error exporting liquidacion:', exportError)
+      notify.error('No se pudo generar la liquidacion')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   const getReportSuffix = () => {
     if (tipoReporte === 'diario') return fechaSeleccionada
+    if (tipoReporte === 'semanal') return `semana_${semanaSeleccionada}`
     if (tipoReporte === 'mensual') return mesSeleccionado
     return anioSeleccionado
   }
@@ -252,7 +301,7 @@ export default function Reportes() {
           <div className="mt-8">
             <h3 className="mb-3 text-base font-semibold text-gray-300 flex items-center gap-2">
               <span className="inline-block h-1 w-1 rounded-full bg-pink-400" />
-              Totales por Chica
+              Ranking de Chicas
             </h3>
             <DataTable
               columns={chicaColumns}
@@ -369,6 +418,23 @@ export default function Reportes() {
               <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
               {isExporting ? 'Procesando...' : 'PDF'}
             </span>
+          </Button>
+          <Button
+            onClick={() => handleLiquidacion('pdf')}
+            disabled={isExporting}
+            variant="secondary"
+            size="sm"
+            title="Comision a pagar por chica, con linea de firma"
+          >
+            Liquidacion PDF
+          </Button>
+          <Button
+            onClick={() => handleLiquidacion('csv')}
+            disabled={isExporting}
+            variant="secondary"
+            size="sm"
+          >
+            Liquidacion Excel
           </Button>
           <Button
             onClick={fetchReports}

@@ -10,7 +10,10 @@ import DataTable, { type DataTableColumn } from '../../../components/molecules/D
 import FormField from '../../../components/molecules/FormField'
 import PageHeader from '../../../components/molecules/PageHeader'
 import Modal from '../../../components/Modal'
-import { getAuthHeaders, getStoredUser } from '../../../lib/client-auth'
+import { getAuthHeaders } from '../../../lib/client-auth'
+import { confirmar } from '../../../lib/feedback'
+import { can } from '../../../lib/permissions'
+import { useCurrentUser } from '../../../lib/use-current-user'
 
 interface Usuario {
   id: number
@@ -19,13 +22,6 @@ interface Usuario {
   rol: 'admin' | 'caja' | 'supervisor'
   activo: boolean
   ultimoLogin: string | null
-}
-
-interface AuthUser {
-  id: number
-  nombre: string
-  email: string
-  rol: string
 }
 
 interface CreateFormData {
@@ -52,7 +48,7 @@ export default function Usuarios() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
+  const { user: currentUser } = useCurrentUser()
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -80,7 +76,6 @@ export default function Usuarios() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
   useEffect(() => {
-    setCurrentUser(getStoredUser<AuthUser>())
     fetchUsuarios()
   }, [])
 
@@ -210,7 +205,13 @@ export default function Usuarios() {
 
   const handleToggleActivo = async (u: Usuario) => {
     const action = u.activo ? 'desactivar' : 'activar'
-    if (!confirm(`Deseas ${action} a ${u.nombre}?`)) return
+    const ok = await confirmar({
+      title: `${action === 'activar' ? 'Activar' : 'Desactivar'} usuario`,
+      message: `Deseas ${action} a ${u.nombre}?`,
+      confirmLabel: action === 'activar' ? 'Activar' : 'Desactivar',
+      tone: action === 'activar' ? 'primary' : 'danger',
+    })
+    if (!ok) return
 
     try {
       setTogglingId(u.id)
@@ -236,7 +237,12 @@ export default function Usuarios() {
   // ── Delete ───────────────────────────────────────────────────────────────────
 
   const handleDelete = async (u: Usuario) => {
-    if (!confirm(`Eliminar a ${u.nombre}? El usuario quedara inactivo.`)) return
+    const ok = await confirmar({
+      title: 'Eliminar usuario',
+      message: `Eliminar a ${u.nombre}? El usuario quedara inactivo.`,
+      confirmLabel: 'Eliminar',
+    })
+    if (!ok) return
 
     try {
       setDeletingId(u.id)
@@ -303,7 +309,7 @@ export default function Usuarios() {
       key: 'acciones',
       header: 'Acciones',
       cell: (u) =>
-        currentUser?.rol === 'admin' ? (
+        can(currentUser?.rol, 'usuarios.gestionar') ? (
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={() => openEdit(u)}>
               Editar
@@ -339,7 +345,7 @@ export default function Usuarios() {
           title="Usuarios"
           description="Administra las cuentas de acceso al sistema."
           actions={
-            currentUser?.rol === 'admin' ? (
+            can(currentUser?.rol, 'usuarios.gestionar') ? (
               <Button onClick={() => setShowCreateModal(true)}>+ Agregar Usuario</Button>
             ) : undefined
           }

@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Sidebar, { SidebarToggle } from '../components/Sidebar'
+import Toaster from './feedback/Toaster'
+import ConfirmDialog from './feedback/ConfirmDialog'
 import { isSessionExpired, logout, useAuthStore } from '../store/authSlice'
 import { useUIStore } from '../store'
 import { cn } from '@/lib/utils'
@@ -65,6 +67,8 @@ export default function DashboardLayout({ children, showSidebar = true }: Dashbo
           {children}
         </div>
       </main>
+      <Toaster />
+      <ConfirmDialog />
     </div>
   )
 }

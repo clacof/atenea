@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
+import { can } from '@/lib/permissions'
+import { audit } from '@/lib/audit'
 import { Rol } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request)
-  if (!user || user.rol !== 'admin') {
+  if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+  if (!can(user.rol, 'usuarios.gestionar')) {
+    return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
 
   try {
@@ -31,8 +36,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const user = getUserFromRequest(request)
-  if (!user || user.rol !== 'admin') {
+  if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+  if (!can(user.rol, 'usuarios.gestionar')) {
+    return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
 
   try {
@@ -74,6 +82,14 @@ export async function POST(request: NextRequest) {
         activo: true,
         ultimoLogin: true,
       },
+    })
+
+    audit({
+      user,
+      accion: 'CREAR',
+      tabla: 'Usuario',
+      registroId: nuevo.id,
+      detalles: { nombre: nuevo.nombre, email: nuevo.email, rol: nuevo.rol },
     })
 
     return NextResponse.json(nuevo, { status: 201 })

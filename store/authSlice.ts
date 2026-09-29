@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { resetCurrentUser } from '@/lib/use-current-user'
 
 export interface User {
   id: number
@@ -60,5 +61,6 @@ export const isSessionExpired = (): boolean => {
 
 export const logout = async (): Promise<void> => {
   useAuthStore.getState().clearAuth()
+  resetCurrentUser()
   await fetch('/api/auth/logout', { method: 'POST' }).catch(console.error)
 }

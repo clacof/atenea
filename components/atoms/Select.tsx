@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 import type { SelectHTMLAttributes } from 'react'
 
 interface Option {
@@ -29,6 +29,8 @@ export default function Select({
   className = '',
   ...props
 }: SelectProps) {
+  const generatedId = useId()
+  const baseId = id ?? generatedId
   const [isOpen, setIsOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -102,7 +104,8 @@ export default function Select({
     <div ref={containerRef} className={`relative ${className}`}>
       {label && (
         <label
-          htmlFor={id}
+          id={`${baseId}-label`}
+          htmlFor={baseId}
           className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider"
         >
           {label}
@@ -111,11 +114,13 @@ export default function Select({
 
       <button
         type="button"
-        id={id}
+        id={baseId}
         role="combobox"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        aria-labelledby={label ? `${id}-label` : undefined}
+        aria-controls={`${baseId}-listbox`}
+        aria-activedescendant={isOpen && highlightedIndex >= 0 ? `${baseId}-option-${highlightedIndex}` : undefined}
+        aria-labelledby={label ? `${baseId}-label` : undefined}
         disabled={props.disabled}
         onClick={() => !props.disabled && setIsOpen(!isOpen)}
         onKeyDown={handleKeyDown}
@@ -134,8 +139,8 @@ export default function Select({
       {isOpen && (
         <ul
           ref={listRef}
+          id={`${baseId}-listbox`}
           role="listbox"
-          aria-activedescendant={highlightedIndex >= 0 ? `${id}-option-${highlightedIndex}` : undefined}
           className="absolute z-50 w-full mt-1.5 py-1.5
             bg-gray-800/95 backdrop-blur-sm
             border border-gray-700/50 rounded-lg shadow-2xl shadow-black/40
@@ -149,7 +154,7 @@ export default function Select({
             options.map((option, index) => (
               <li
                 key={option.value}
-                id={`${id}-option-${index}`}
+                id={`${baseId}-option-${index}`}
                 role="option"
                 aria-selected={String(option.value) === String(value)}
                 aria-disabled={option.disabled}

@@ -165,21 +165,25 @@ export async function GET(request: NextRequest) {
     })
 
     // Por chica
-    const porChica: Record<string, { cantidad: number; comision: number }> = {}
+    const porChica: Record<string, { cantidad: number; comision: number; ventas: number }> = {}
     comandas.forEach(cmd => {
       if (cmd.chica1) {
         if (!porChica[cmd.chica1.nombre]) {
-          porChica[cmd.chica1.nombre] = { cantidad: 0, comision: 0 }
+          porChica[cmd.chica1.nombre] = { cantidad: 0, comision: 0, ventas: 0 }
         }
         porChica[cmd.chica1.nombre].cantidad++
         porChica[cmd.chica1.nombre].comision += cmd.comisionChica1 || 0
+        // Consumo generado: monto total de las comandas en que participo
+        porChica[cmd.chica1.nombre].ventas += cmd.precioFinal
       }
       if (cmd.chica2) {
         if (!porChica[cmd.chica2.nombre]) {
-          porChica[cmd.chica2.nombre] = { cantidad: 0, comision: 0 }
+          porChica[cmd.chica2.nombre] = { cantidad: 0, comision: 0, ventas: 0 }
         }
         porChica[cmd.chica2.nombre].cantidad++
         porChica[cmd.chica2.nombre].comision += cmd.comisionChica2 || 0
+        // Consumo generado: monto total de las comandas en que participo
+        porChica[cmd.chica2.nombre].ventas += cmd.precioFinal
       }
     })
 
@@ -217,7 +221,10 @@ export async function GET(request: NextRequest) {
         promedioPorComanda: totalComandas > 0 ? Math.round(totalVentas / totalComandas) : 0,
       },
       porMedioPago,
-      porChica: Object.entries(porChica).map(([nombre, data]) => ({ nombre, ...data })),
+      // Ranking: mayor comision primero, luego mayor consumo
+      porChica: Object.entries(porChica)
+        .map(([nombre, data]) => ({ nombre, ...data }))
+        .sort((a, b) => b.comision - a.comision || b.ventas - a.ventas),
       porCategoria: Object.entries(porCategoria).map(([nombre, data]) => ({ nombre, ...data })),
       // Desglose diario de comisiones por chica para reporte semanal
       ...(tipo === 'semanal' ? { comisionesSemanales: buildComisionesSemanales(comandas, startDate) } : {}),

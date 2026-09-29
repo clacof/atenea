@@ -1,5 +1,7 @@
 import { Fragment, type ReactNode, useState } from 'react'
 import Card from '../atoms/Card'
+import Button from '../atoms/Button'
+import { TableRowSkeleton } from '../atoms/Skeleton'
 import EmptyState from './EmptyState'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +20,9 @@ interface DataTableProps<T> {
   emptyTitle: string
   emptyDescription?: string
   renderExpanded?: (item: T) => ReactNode
+  /** Filas por pagina (paginacion en cliente). Sin valor muestra todo. */
+  pageSize?: number
+  loading?: boolean
 }
 
 export default function DataTable<T>({
@@ -27,9 +32,17 @@ export default function DataTable<T>({
   emptyTitle,
   emptyDescription,
   renderExpanded,
+  pageSize,
+  loading = false,
 }: DataTableProps<T>) {
   const [expandedRow, setExpandedRow] = useState<string | number | null>(null)
+  const [page, setPage] = useState(1)
   const essentialColumns = columns.filter((c) => c.essential)
+
+  const totalPages = pageSize ? Math.max(1, Math.ceil(data.length / pageSize)) : 1
+  // Si cambian los datos (filtros) y la pagina queda fuera de rango, volver a la ultima valida
+  const currentPage = Math.min(page, totalPages)
+  const rows = pageSize ? data.slice((currentPage - 1) * pageSize, currentPage * pageSize) : data
 
   const toggleRow = (key: string | number) => {
     setExpandedRow((prev) => (prev === key ? null : key))
@@ -49,7 +62,9 @@ export default function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {data.map((item) => {
+            {loading &&
+              Array.from({ length: 5 }).map((_, i) => <TableRowSkeleton key={i} columns={columns.length} />)}
+            {!loading && rows.map((item) => {
               const rowKey = getRowKey(item)
               const isExpanded = expandedRow === rowKey
               const isClickable = typeof renderExpanded === 'function'
@@ -62,7 +77,22 @@ export default function DataTable<T>({
                 <Fragment key={rowKey}>
                   <tr
                     onClick={handleRowClick}
+                    {...(isClickable
+                      ? {
+                          tabIndex: 0,
+                          'aria-expanded': isExpanded,
+                          onKeyDown: (e: React.KeyboardEvent) => {
+                            // Solo la fila; no interceptar teclas de botones internos
+                            if (e.target !== e.currentTarget) return
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              toggleRow(rowKey)
+                            }
+                          },
+                        }
+                      : {})}
                     className={cn(
+                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500',
                       'border-t border-gray-800 text-gray-100 transition',
                       isClickable ? 'cursor-pointer hover:bg-gray-800/60' : 'hover:bg-gray-800/40',
                     )}
@@ -88,7 +118,12 @@ export default function DataTable<T>({
       </div>
 
       <div className="divide-y divide-gray-800 md:hidden">
-        {data.map((item) => {
+        {loading && (
+          <div className="p-3 text-sm text-gray-400" role="status">
+            Cargando...
+          </div>
+        )}
+        {!loading && rows.map((item) => {
           const rowKey = getRowKey(item)
           const isExpanded = expandedRow === rowKey
           return (
@@ -139,7 +174,41 @@ export default function DataTable<T>({
         })}
       </div>
 
-      {data.length === 0 ? <EmptyState title={emptyTitle} description={emptyDescription} /> : null}
+      {!loading && data.length === 0 ? <EmptyState title={emptyTitle} description={emptyDescription} /> : null}
+
+      {pageSize && totalPages > 1 ? (
+        <nav
+          className="flex items-center justify-between gap-3 border-t border-gray-800 px-3 py-2 text-sm text-gray-400"
+          aria-label="Paginacion"
+        >
+          <span>
+            {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, data.length)} de {data.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={currentPage === 1}
+              onClick={() => setPage(currentPage - 1)}
+              aria-label="Pagina anterior"
+            >
+              ‹
+            </Button>
+            <span aria-current="page">
+              {currentPage} / {totalPages}
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={currentPage === totalPages}
+              onClick={() => setPage(currentPage + 1)}
+              aria-label="Pagina siguiente"
+            >
+              ›
+            </Button>
+          </div>
+        </nav>
+      ) : null}
     </Card>
   )
 }

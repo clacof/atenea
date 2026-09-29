@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
+import { audit } from '@/lib/audit'
 import { normalizeCommissionSlots } from '@/lib/commission-utils'
 
 function getTodayBounds() {
@@ -110,7 +111,7 @@ export async function GET(request: NextRequest) {
     }
 
     const todasChicas = await prisma.chica.findMany({
-      where: { activa: true },
+      where: { activa: true, archivada: false },
       orderBy: { nombre: 'asc' },
     })
 
@@ -172,6 +173,10 @@ export async function POST(request: NextRequest) {
       data: { estado: 'pagada' },
     })
 
+    if (result.count > 0) {
+      audit({ user, accion: 'CAMBIO_ESTADO', tabla: 'Comanda', detalles: { cierreCuenta: clienteNombre, comandas: result.count } })
+    }
+
     return NextResponse.json({ closed: result.count })
   } catch (error) {
     console.error('Error closing client account:', error)
@@ -221,7 +226,12 @@ export async function PATCH(request: NextRequest) {
       data: { chica2Liberada: true },
     })
 
-    return NextResponse.json({ freed: freed1.count + freed2.count })
+    const freed = freed1.count + freed2.count
+    if (freed > 0) {
+      audit({ user, accion: 'CAMBIO_ESTADO', tabla: 'Chica', registroId: chicaId, detalles: { liberada: true, comandas: freed } })
+    }
+
+    return NextResponse.json({ freed })
   } catch (error) {
     console.error('Error liberando chica:', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

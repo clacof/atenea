@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { getAuthHeaders } from '../../../lib/client-auth'
+import { confirmar } from '../../../lib/feedback'
 import { formatCurrency } from '../../../lib/formatters'
 import { cn } from '@/lib/utils'
 import { normalizeCommissionSlots } from '@/lib/commission-utils'
@@ -80,12 +81,13 @@ export default function TurnoActivo() {
   }, [loadTurno])
 
   const handleCerrarCuenta = async (clienteNombre: string) => {
-    if (
-      !confirm(
-        `Cerrar cuenta de ${clienteNombre}?\nSe marcaran todas sus comandas activas como pagadas.`,
-      )
-    )
-      return
+    const ok = await confirmar({
+      title: `Cerrar cuenta de ${clienteNombre}`,
+      message: 'Se marcaran todas sus comandas activas como pagadas.',
+      confirmLabel: 'Cerrar cuenta',
+      tone: 'primary',
+    })
+    if (!ok) return
 
     try {
       setCerrando(clienteNombre)
@@ -135,12 +137,13 @@ export default function TurnoActivo() {
     })
 
   const handleLiberarChica = async (chicaId: number, chicaNombre: string) => {
-    if (
-      !confirm(
-        `Liberar a ${chicaNombre}? Seguirá visible en sus comandas, pero quedara disponible para nuevos clientes.`,
-      )
-    )
-      return
+    const ok = await confirmar({
+      title: `Liberar a ${chicaNombre}`,
+      message: 'Seguira visible en sus comandas, pero quedara disponible para nuevos clientes.',
+      confirmLabel: 'Liberar',
+      tone: 'primary',
+    })
+    if (!ok) return
 
     try {
       setLiberando(chicaId)

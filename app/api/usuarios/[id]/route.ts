@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { isPrismaNotFound } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
+import { can } from '@/lib/permissions'
+import { audit } from '@/lib/audit'
 import { Rol } from '@prisma/client'
 
 interface RouteParams {
@@ -11,8 +13,11 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const user = getUserFromRequest(request)
-  if (!user || user.rol !== 'admin') {
+  if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+  if (!can(user.rol, 'usuarios.gestionar')) {
+    return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
 
   try {
@@ -42,8 +47,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const user = getUserFromRequest(request)
-  if (!user || user.rol !== 'admin') {
+  if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+  if (!can(user.rol, 'usuarios.gestionar')) {
+    return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
 
   try {
@@ -102,6 +110,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       },
     })
 
+    // Nunca registrar el hash
+    const camposVisibles = Object.fromEntries(Object.entries(updateData).filter(([k]) => k !== 'passwordHash'))
+    audit({
+      user,
+      accion: 'EDITAR',
+      tabla: 'Usuario',
+      registroId: updated.id,
+      detalles: { ...camposVisibles, ...(password !== undefined ? { password: 'cambiada' } : {}) },
+    })
+
     return NextResponse.json(updated)
   } catch (error) {
     console.error('Error updating usuario:', error)
@@ -122,8 +140,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const user = getUserFromRequest(request)
-  if (!user || user.rol !== 'admin') {
+  if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+  if (!can(user.rol, 'usuarios.gestionar')) {
+    return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
 
   try {
@@ -158,6 +179,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       },
     })
 
+    audit({ user, accion: 'CAMBIO_ESTADO', tabla: 'Usuario', registroId: updated.id, detalles: { activo: updated.activo } })
+
     return NextResponse.json(updated)
   } catch (error) {
     console.error('Error updating usuario status:', error)
@@ -170,8 +193,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const user = getUserFromRequest(request)
-  if (!user || user.rol !== 'admin') {
+  if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+  if (!can(user.rol, 'usuarios.gestionar')) {
+    return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
 
   try {
@@ -196,6 +222,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       where: { id: Number(id) },
       data: { activo: false },
     })
+    audit({ user, accion: 'ELIMINAR', tabla: 'Usuario', registroId: Number(id), detalles: { email: targetUsuario?.email } })
 
     return NextResponse.json({ ok: true })
   } catch (error) {

@@ -1,9 +1,11 @@
-const CACHE_NAME = 'atenea-v2';
+const CACHE_NAME = 'atenea-v3';
 const URLS_TO_CACHE = [
   '/',
   '/login',
   '/dashboard',
   '/offline.html',
+  '/brand/atenea-logo.svg',
+  '/icon-192.png',
 ];
 
 // Instalación del service worker

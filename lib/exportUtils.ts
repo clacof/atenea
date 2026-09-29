@@ -47,7 +47,7 @@ export function generateExcel(data: ExportData): Blob {
     csv += 'TOTALES POR CHICA\n'
     csv += 'Chica,Cantidad,Comision,Ventas\n'
     data.porChica.forEach(item => {
-      csv += `"${item.nombre}",${item.cantidad},${item.comision},${item.ventas}\n`
+      csv += `${csvCell(item.nombre)},${item.cantidad},${item.comision},${item.ventas ?? 0}\n`
     })
     csv += '\n'
   }
@@ -57,7 +57,7 @@ export function generateExcel(data: ExportData): Blob {
     csv += 'TOTALES POR CATEGORIA\n'
     csv += 'Categoria,Cantidad,Total,Comision\n'
     data.porCategoria.forEach(item => {
-      csv += `"${item.nombre}",${item.cantidad},${item.total},${item.comision}\n`
+      csv += `${csvCell(item.nombre)},${item.cantidad},${item.total},${item.comision}\n`
     })
   }
 
@@ -121,7 +121,7 @@ export async function generatePDF(data: ExportData): Promise<Blob> {
     addLine('Totales por Chica', 16)
     addGap(4)
     data.porChica.forEach((item) => {
-      addLine(`${item.nombre}: ${item.cantidad} comandas, ventas $${Math.round(item.ventas).toLocaleString()}, comision $${item.comision.toLocaleString()}`)
+      addLine(`${item.nombre}: ${item.cantidad} comandas, consumo $${Math.round(item.ventas ?? 0).toLocaleString()}, comision $${item.comision.toLocaleString()}`)
     })
   }
 
@@ -133,6 +133,118 @@ export async function generatePDF(data: ExportData): Promise<Blob> {
       addLine(`${item.nombre}: ${item.cantidad} items, total $${item.total.toLocaleString()}, comision $${item.comision.toLocaleString()}`)
     })
   }
+
+  return pdf.output('blob')
+}
+
+// ── Liquidacion de comisiones por chica ────────────────────────
+
+const DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'] as const
+
+export interface LiquidacionInput {
+  periodo: string
+  porChica: Array<{ nombre: string; cantidad: number; comision: number }>
+  comisionesSemanales?: Array<Record<string, number | string> & { nombre: string; total: number }>
+}
+
+export interface LiquidacionFila {
+  nombre: string
+  comandas: number
+  comision: number
+  porDia?: Record<(typeof DIAS)[number], number>
+}
+
+/** Filas de liquidacion: solo chicas con comision, de mayor a menor. */
+export function buildLiquidacion(data: LiquidacionInput): { filas: LiquidacionFila[]; total: number } {
+  const semanal = new Map((data.comisionesSemanales ?? []).map((row) => [row.nombre, row]))
+  const filas = data.porChica
+    .filter((c) => c.comision > 0)
+    .map((c) => {
+      const dias = semanal.get(c.nombre)
+      return {
+        nombre: c.nombre,
+        comandas: c.cantidad,
+        comision: c.comision,
+        ...(dias
+          ? { porDia: Object.fromEntries(DIAS.map((d) => [d, Number(dias[d]) || 0])) as LiquidacionFila['porDia'] }
+          : {}),
+      }
+    })
+    .sort((a, b) => b.comision - a.comision)
+  return { filas, total: filas.reduce((sum, f) => sum + f.comision, 0) }
+}
+
+/** Celda CSV segura: escapa comillas y neutraliza formulas (=, +, -, @). */
+export function csvCell(value: string | number): string {
+  if (typeof value === 'number') return String(value)
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
+  return `"${safe.replace(/"/g, '""')}"`
+}
+
+export function generateLiquidacionCSV(data: LiquidacionInput): Blob {
+  const { filas, total } = buildLiquidacion(data)
+  const conDias = filas.some((f) => f.porDia)
+  let csv = '\uFEFFATENEA - Liquidacion de comisiones\n'
+  csv += `Periodo,${csvCell(data.periodo)}\n`
+  csv += `Generado,${csvCell(new Date().toLocaleString('es-ES'))}\n\n`
+  csv += ['Chica', 'Comandas', ...(conDias ? DIAS.map((d) => d[0].toUpperCase() + d.slice(1)) : []), 'Comision', 'Firma'].join(',') + '\n'
+  for (const f of filas) {
+    const dias = conDias ? DIAS.map((d) => f.porDia?.[d] ?? 0) : []
+    csv += [csvCell(f.nombre), f.comandas, ...dias, f.comision, ''].join(',') + '\n'
+  }
+  csv += `\nTotal a pagar,,${conDias ? ','.repeat(DIAS.length) : ''}${total}\n`
+  return new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+}
+
+export async function generateLiquidacionPDF(data: LiquidacionInput): Promise<Blob> {
+  const { jsPDF } = await import('jspdf')
+  const { filas, total } = buildLiquidacion(data)
+  const pdf = new jsPDF({ unit: 'pt', format: 'a4' })
+  const left = 40
+  const money = (n: number) => `$${n.toLocaleString('es-CO')}`
+
+  pdf.setFillColor(31, 41, 55)
+  pdf.rect(0, 0, 595, 80, 'F')
+  pdf.setTextColor(255, 255, 255)
+  pdf.setFontSize(20)
+  pdf.text('Liquidacion de comisiones', left, 40)
+  pdf.setFontSize(11)
+  pdf.text(`Periodo: ${data.periodo}`, left, 60)
+  pdf.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 320, 60)
+
+  let y = 115
+  pdf.setTextColor(31, 41, 55)
+  pdf.setFontSize(10)
+  pdf.setFont('helvetica', 'bold')
+  pdf.text('Chica', left, y)
+  pdf.text('Comandas', 250, y)
+  pdf.text('Comision', 330, y)
+  pdf.text('Firma', 430, y)
+  pdf.setFont('helvetica', 'normal')
+  y += 8
+  pdf.line(left, y, 555, y)
+  y += 22
+
+  for (const f of filas) {
+    if (y > 780) {
+      pdf.addPage()
+      y = 60
+    }
+    pdf.setFontSize(11)
+    pdf.text(pdf.splitTextToSize(f.nombre, 200)[0], left, y)
+    pdf.text(String(f.comandas), 250, y)
+    pdf.text(money(f.comision), 330, y)
+    pdf.line(430, y + 2, 555, y + 2)
+    y += 28
+  }
+
+  y += 6
+  pdf.line(left, y, 555, y)
+  y += 20
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(12)
+  pdf.text('Total a pagar', left, y)
+  pdf.text(money(total), 330, y)
 
   return pdf.output('blob')
 }

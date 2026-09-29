@@ -10,6 +10,7 @@ import PageHeader from '../../../components/molecules/PageHeader'
 import ConfigSection from '../../../components/organisms/config/ConfigSection'
 import Modal from '../../../components/Modal'
 import { getAuthHeaders } from '../../../lib/client-auth'
+import { apiError, notify } from '../../../lib/feedback'
 import { DomainValidator, type ConfigData as ConfigDataType } from '../../../lib/validations'
 
 interface ConfigData extends ConfigDataType {
@@ -41,7 +42,8 @@ export default function Configuracion() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [showPasswordModal, setShowPasswordModal] = useState(false)
-  const [showLogsModal, setShowLogsModal] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
 
   useEffect(() => {
@@ -66,15 +68,35 @@ export default function Configuracion() {
     }
   }
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const closePasswordModal = () => {
+    setShowPasswordModal(false)
+    setPasswordError('')
+    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  }
+
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
+    setPasswordError('')
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('Las contrasenas no coinciden')
+      setPasswordError('Las contrasenas no coinciden')
       return
     }
-      alert('✓ Contrasena actualizada correctamente')
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
-    setShowPasswordModal(false)
+
+    try {
+      setChangingPassword(true)
+      const response = await fetch('/api/auth/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ actual: passwordData.currentPassword, nueva: passwordData.newPassword }),
+      })
+      if (!response.ok) throw new Error(await apiError(response, 'No se pudo cambiar la contrasena'))
+      notify.success('Contrasena actualizada correctamente')
+      closePasswordModal()
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'No se pudo cambiar la contrasena')
+    } finally {
+      setChangingPassword(false)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -248,24 +270,12 @@ export default function Configuracion() {
               🔐 Cambiar Contrasena
             </Button>
             <Button
-              onClick={() => setShowLogsModal(true)}
+              onClick={() => router.push('/dashboard/auditoria')}
               variant="ghost"
               fullWidth
               className="justify-start text-left"
             >
               📋 Ver Logs de Auditoria
-            </Button>
-            <Button
-              onClick={() => {
-                if (confirm('Deseas crear un backup del sistema?')) {
-                  alert('✓ Backup creado: backup_' + new Date().toISOString().split('T')[0] + '.zip')
-                }
-              }}
-              variant="ghost"
-              fullWidth
-              className="justify-start text-left"
-            >
-              💾 Hacer Backup
             </Button>
           </div>
         </ConfigSection>
@@ -274,13 +284,19 @@ export default function Configuracion() {
         <Modal
           isOpen={showPasswordModal}
           title="Cambiar Contrasena"
-          onClose={() => setShowPasswordModal(false)}
+          onClose={closePasswordModal}
         >
           <form onSubmit={handleChangePassword} className="space-y-4">
+            {passwordError && (
+              <div className="bg-red-900 text-red-200 p-3 rounded text-sm" role="alert">
+                {passwordError}
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium mb-2">Contrasena Actual</label>
               <Input
                 type="password"
+                autoComplete="current-password"
                 value={passwordData.currentPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
               />
@@ -289,6 +305,7 @@ export default function Configuracion() {
               <label className="block text-sm font-medium mb-2">Nueva Contrasena</label>
               <Input
                 type="password"
+                autoComplete="new-password"
                 value={passwordData.newPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
               />
@@ -297,6 +314,7 @@ export default function Configuracion() {
               <label className="block text-sm font-medium mb-2">Confirmar Contrasena</label>
               <Input
                 type="password"
+                autoComplete="new-password"
                 value={passwordData.confirmPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
               />
@@ -304,7 +322,7 @@ export default function Configuracion() {
             <div className="flex gap-3 justify-end pt-4">
               <Button
                 type="button"
-                onClick={() => setShowPasswordModal(false)}
+                onClick={closePasswordModal}
                 variant="secondary"
               >
                 Cancelar
@@ -312,6 +330,7 @@ export default function Configuracion() {
               <Button
                 type="submit"
                 variant="primary"
+                isLoading={changingPassword}
               >
                 Actualizar
               </Button>
@@ -319,31 +338,6 @@ export default function Configuracion() {
           </form>
         </Modal>
 
-        {/* Logs Modal */}
-        <Modal
-          isOpen={showLogsModal}
-          title="Logs de Auditoria"
-          onClose={() => setShowLogsModal(false)}
-        >
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            <div className="text-xs bg-gray-700 p-2 rounded">
-              <p className="text-gray-400">[2024-01-15 22:45:30]</p>
-              <p>Usuario: admin@atenea.com - Accion: Crear Comanda #001</p>
-            </div>
-            <div className="text-xs bg-gray-700 p-2 rounded">
-              <p className="text-gray-400">[2024-01-15 22:40:15]</p>
-              <p>Usuario: admin@atenea.com - Accion: Actualizar Configuracion</p>
-            </div>
-            <div className="text-xs bg-gray-700 p-2 rounded">
-              <p className="text-gray-400">[2024-01-15 22:30:00]</p>
-              <p>Usuario: admin@atenea.com - Accion: Descargar Reporte Excel</p>
-            </div>
-            <div className="text-xs bg-gray-700 p-2 rounded">
-              <p className="text-gray-400">[2024-01-15 22:15:45]</p>
-              <p>Usuario: admin@atenea.com - Accion: Iniciar Sesion</p>
-            </div>
-          </div>
-        </Modal>
     </div>
   )
 }

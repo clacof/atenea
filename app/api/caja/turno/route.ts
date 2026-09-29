@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
+import { can } from '@/lib/permissions'
+import { audit } from '@/lib/audit'
+import { cierreCajaSchema, parseBody } from '@/lib/schemas'
 
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request)
-  if (!user || !['admin', 'caja'].includes(user.rol)) {
+  if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+  if (!can(user.rol, 'caja.gestionar')) {
+    return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
 
   try {
@@ -63,30 +69,37 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const user = getUserFromRequest(request)
-  if (!user || !['admin', 'caja'].includes(user.rol)) {
+  if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
+  if (!can(user.rol, 'caja.gestionar')) {
+    return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
+  }
+
+  const { data, response } = await parseBody(request, cierreCajaSchema)
+  if (response) return response
+  const { totalEfectivo, totalTransferencia, totalDebito, totalCredito } = data
 
   try {
-    const data = await request.json()
-    const { totalEfectivo, totalTransferencia, totalDebito, totalCredito } = data
-
     // Crear registro de cierre de turno
     const turno = await prisma.cajaTurno.create({
       data: {
         fecha: new Date(),
         turno: '1',
-        totalEfectivo: Number(totalEfectivo || 0),
-        totalTransferencia: Number(totalTransferencia || 0),
-        totalDebito: Number(totalDebito || 0),
-        totalCredito: Number(totalCredito || 0),
-        totalGeneral:
-          Number(totalEfectivo || 0) +
-          Number(totalTransferencia || 0) +
-          Number(totalDebito || 0) +
-          Number(totalCredito || 0),
+        totalEfectivo,
+        totalTransferencia,
+        totalDebito,
+        totalCredito,
+        totalGeneral: totalEfectivo + totalTransferencia + totalDebito + totalCredito,
         responsable: user.id.toString(),
       },
+    })
+    audit({
+      user,
+      accion: 'CIERRE_CAJA',
+      tabla: 'CajaTurno',
+      registroId: turno.id,
+      detalles: { totalEfectivo, totalTransferencia, totalDebito, totalCredito, totalGeneral: turno.totalGeneral },
     })
 
     return NextResponse.json(turno, { status: 201 })

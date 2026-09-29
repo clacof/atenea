@@ -2,7 +2,19 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
+/**
+ * Borra TODA la base. Solo disponible fuera de produccion y con ALLOW_DB_RESET=1,
+ * porque el .env local puede apuntar a la base real.
+ */
+function resetBloqueado() {
+  return process.env.NODE_ENV === 'production' || process.env.ALLOW_DB_RESET !== '1'
+}
+
 export async function POST() {
+  if (resetBloqueado()) {
+    return NextResponse.json({ error: 'No disponible' }, { status: 404 })
+  }
+
   try {
     // Limpiar datos anteriores
     await prisma.comanda.deleteMany()

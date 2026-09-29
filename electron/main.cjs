@@ -25,6 +25,8 @@ function createMainWindow() {
     minWidth: 1100,
     minHeight: 700,
     autoHideMenuBar: true,
+    backgroundColor: '#020617',
+    icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

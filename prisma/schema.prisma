@@ -81,6 +81,10 @@ model Chica {
   id           Int       @id @default(autoincrement())
   nombre       String
   activa       Boolean   @default(true)
+  archivada    Boolean   @default(false)
+  alias        String?
+  telefono     String?
+  notas        String?
   fechaIngreso DateTime  @default(now())
   comandas1    Comanda[] @relation("Chica1")
   comandas2    Comanda[] @relation("Chica2")
@@ -150,4 +154,8 @@ model AuditLog {
   registroId Int?
   fecha      DateTime @default(now())
   detalles   String?
+
+  @@index([fecha])
+  @@index([tabla])
+  @@index([usuarioId])
 }

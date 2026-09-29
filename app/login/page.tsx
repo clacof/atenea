@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { FormValidator } from '../../lib/validations'
 import FormError from '../../components/FormError'
+import Logo from '../../components/atoms/Logo'
 import {
   getRememberedEmail,
   setRememberedEmail,
   clearRememberedEmail,
 } from '../../lib/client-auth'
 import { useAuthStore } from '../../store'
+import { resetCurrentUser } from '../../lib/use-current-user'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -69,6 +71,7 @@ export default function Login() {
       const data = await response.json()
       // Store user in Zustand (persisted to localStorage automatically)
       useAuthStore.getState().setUser(data.user, data.expiresAt)
+      resetCurrentUser()
       if (rememberMe) setRememberedEmail(email)
       else clearRememberedEmail()
       router.push('/dashboard')
@@ -82,7 +85,9 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900">
       <div className="bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h1 className="text-2xl font-bold text-white text-center mb-6">Atenea Night Club</h1>
+        <h1 className="mb-6 flex justify-center">
+          <Logo size={220} priority className="h-auto w-[220px] drop-shadow-[0_0_24px_rgba(168,85,247,0.35)]" />
+        </h1>
         <form onSubmit={handleSubmit} autoComplete="off">
           <div className="mb-4">
             <label className="block text-gray-300 mb-2">Email</label>

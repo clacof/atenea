@@ -15,7 +15,9 @@
     "dev:electron": "concurrently -k \"npm run dev\" \"npm run electron:dev\"",
     "start:electron": "cross-env NODE_ENV=production electron electron/main.cjs",
     "build:electron": "npm run build && electron-builder --dir",
-    "dist:electron": "npm run build && electron-builder"
+    "dist:electron": "npm run build && electron-builder",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
@@ -34,6 +36,7 @@
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
     "tailwind-merge": "^3.5.0",
+    "zod": "^4.6.5",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
@@ -50,11 +53,13 @@
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",
+    "vitest": "^3.2.7",
     "wait-on": "^9.0.1"
   },
   "build": {
     "appId": "com.atenea.desktop",
     "productName": "Atenea",
+    "icon": "electron/icon.png",
     "asar": true,
     "directories": {
       "output": "release"

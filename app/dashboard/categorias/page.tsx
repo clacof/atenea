@@ -10,7 +10,10 @@ import DataTable, { type DataTableColumn } from '../../../components/molecules/D
 import FormField from '../../../components/molecules/FormField'
 import PageHeader from '../../../components/molecules/PageHeader'
 import Modal from '../../../components/Modal'
-import { getAuthHeaders, getStoredUser } from '../../../lib/client-auth'
+import { getAuthHeaders } from '../../../lib/client-auth'
+import { confirmar } from '../../../lib/feedback'
+import { can } from '../../../lib/permissions'
+import { useCurrentUser } from '../../../lib/use-current-user'
 import { formatCurrency } from '../../../lib/formatters'
 
 interface Categoria {
@@ -30,13 +33,6 @@ interface Categoria {
 }
 
 type TipoCategoria = 'trago' | 'botella'
-
-interface AuthUser {
-  id: number
-  nombre: string
-  email: string
-  rol: string
-}
 
 interface FormData {
   nombre: string
@@ -73,7 +69,7 @@ export default function Categorias() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
+  const { user: currentUser } = useCurrentUser()
   const [actionId, setActionId] = useState<number | null>(null)
   const [editingCategoriaId, setEditingCategoriaId] = useState<number | null>(null)
   const [formData, setFormData] = useState<FormData>({
@@ -91,7 +87,6 @@ export default function Categorias() {
   })
 
   useEffect(() => {
-    setCurrentUser(getStoredUser<AuthUser>())
     fetchCategorias()
   }, [])
 
@@ -283,7 +278,13 @@ export default function Categorias() {
 
   const handleToggleActiva = async (categoria: Categoria) => {
     const accion = categoria.activa ? 'desactivar' : 'activar'
-    if (!confirm(`Deseas ${accion} la categoria "${categoria.nombre}"?`)) return
+    const ok = await confirmar({
+      title: `${accion === 'activar' ? 'Activar' : 'Desactivar'} categoria`,
+      message: `Deseas ${accion} la categoria "${categoria.nombre}"?`,
+      confirmLabel: accion === 'activar' ? 'Activar' : 'Desactivar',
+      tone: accion === 'activar' ? 'primary' : 'danger',
+    })
+    if (!ok) return
 
     try {
       setActionId(categoria.id)
@@ -307,7 +308,12 @@ export default function Categorias() {
   }
 
   const handleDelete = async (categoria: Categoria) => {
-    if (!confirm(`Eliminar permanentemente "${categoria.nombre}"? Esta accion no se puede deshacer.`)) return
+    const ok = await confirmar({
+      title: 'Eliminar categoria',
+      message: `Eliminar permanentemente "${categoria.nombre}"? Esta accion no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+    })
+    if (!ok) return
 
     try {
       setActionId(categoria.id)
@@ -331,7 +337,7 @@ export default function Categorias() {
 
   const accionesCell = (categoria: Categoria) => (
     <div className="flex flex-wrap gap-1.5">
-      {['admin', 'supervisor'].includes(currentUser?.rol ?? '') && (
+      {can(currentUser?.rol, 'categorias.editar') && (
         <Button
           size="sm"
           variant="secondary"
@@ -341,7 +347,7 @@ export default function Categorias() {
           Editar
         </Button>
       )}
-      {['admin', 'supervisor'].includes(currentUser?.rol ?? '') && (
+      {can(currentUser?.rol, 'categorias.editar') && (
         <Button
           size="sm"
           variant="secondary"
@@ -351,7 +357,7 @@ export default function Categorias() {
           {categoria.activa ? 'Desactivar' : 'Activar'}
         </Button>
       )}
-      {currentUser?.rol === 'admin' && (
+      {can(currentUser?.rol, 'categorias.eliminar') && (
         <Button
           size="sm"
           variant="danger"

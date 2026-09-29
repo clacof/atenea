@@ -8,6 +8,7 @@ import MetricCard from '../../../components/molecules/MetricCard'
 import PageHeader from '../../../components/molecules/PageHeader'
 import { getAuthHeaders } from '../../../lib/client-auth'
 import { formatCurrency } from '../../../lib/formatters'
+import { apiError, confirmar, notify } from '../../../lib/feedback'
 
 interface CajaTurno {
   totalEfectivo: number
@@ -26,50 +27,54 @@ export default function Caja() {
     fetch('/api/caja/turno', {
       headers: getAuthHeaders(),
     })
-      .then((response) => response.json())
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await apiError(response, 'No se pudo cargar la caja'))
+        return response.json()
+      })
       .then((data) => {
         setCajaTurno(data)
         setLoading(false)
       })
       .catch((fetchError) => {
-        console.error('Error:', fetchError)
+        notify.error(fetchError instanceof Error ? fetchError.message : 'No se pudo cargar la caja')
         setLoading(false)
       })
   }, [])
 
   const handleCloseTurno = async () => {
-    if (!cajaTurno || confirm('Deseas cerrar el turno? Esta accion no se puede deshacer.')) {
-      setIsClosing(true)
-      try {
-        const response = await fetch('/api/caja/turno', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders(),
-          },
-          body: JSON.stringify(cajaTurno),
-        })
+    if (!cajaTurno) return
+    const ok = await confirmar({
+      title: 'Cerrar turno',
+      message: `Total del turno: ${formatCurrency(cajaTurno.totalGeneral)}\n\nEsta accion no se puede deshacer.`,
+      confirmLabel: 'Cerrar turno',
+    })
+    if (!ok) return
 
-        if (response.ok && cajaTurno) {
-          alert(
-            '✓ Turno cerrado correctamente\n\nResumen:\n' +
-            `- Total: $${cajaTurno.totalGeneral.toLocaleString()}\n` +
-            `- Efectivo: $${cajaTurno.totalEfectivo.toLocaleString()}\n` +
-            `- Transferencia: $${cajaTurno.totalTransferencia.toLocaleString()}\n` +
-            `- Debito: $${cajaTurno.totalDebito.toLocaleString()}\n` +
-            `- Credito: $${cajaTurno.totalCredito.toLocaleString()}\n` +
-            '\n🔗 Link publico: https://yellow-banks-divide.loca.lt\n'
-          )
-          // Recargar datos
-          location.reload()
-        } else {
-          alert('Error al cerrar turno')
-        }
-      } catch (err) {
-        alert('Error de conexion')
-      } finally {
-        setIsClosing(false)
+    setIsClosing(true)
+    try {
+      const response = await fetch('/api/caja/turno', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(cajaTurno),
+      })
+
+      if (!response.ok) {
+        throw new Error(await apiError(response, 'Error al cerrar turno'))
       }
+
+      notify.success(
+        'Turno cerrado correctamente\n' +
+          `Total: ${formatCurrency(cajaTurno.totalGeneral)} · Efectivo: ${formatCurrency(cajaTurno.totalEfectivo)} · ` +
+          `Transferencia: ${formatCurrency(cajaTurno.totalTransferencia)} · Debito: ${formatCurrency(cajaTurno.totalDebito)} · ` +
+          `Credito: ${formatCurrency(cajaTurno.totalCredito)}`,
+      )
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : 'Error de conexion')
+    } finally {
+      setIsClosing(false)
     }
   }
 

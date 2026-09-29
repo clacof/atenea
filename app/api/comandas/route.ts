@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import { calculateComision } from '@/lib/businessRules'
+import { audit } from '@/lib/audit'
+import { comandaCreateSchema, parseBody } from '@/lib/schemas'
 
 function getTodayBounds() {
   const now = new Date()
@@ -46,8 +48,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
+  const { data, response } = await parseBody(request, comandaCreateSchema)
+  if (response) return response
+
   try {
-    const data = await request.json()
     const {
       categoriaId,
       tipoConsumo,
@@ -61,17 +65,6 @@ export async function POST(request: NextRequest) {
       medioPago,
       clienteNombre,
     } = data
-
-    // Validacion de campos requeridos
-    if (!categoriaId) {
-      return NextResponse.json({ error: 'Categoria es requerida' }, { status: 400 })
-    }
-    if (!tipoConsumo) {
-      return NextResponse.json({ error: 'Tipo de consumo es requerido' }, { status: 400 })
-    }
-    if (!medioPago) {
-      return NextResponse.json({ error: 'Medio de pago es requerido' }, { status: 400 })
-    }
 
     const clienteNombreSanitized =
       typeof clienteNombre === 'string' && clienteNombre.trim() !== ''
@@ -130,7 +123,7 @@ export async function POST(request: NextRequest) {
 
       const validateChicaDisponible = async (id: number, label: string) => {
         const chica = await tx.chica.findUnique({ where: { id } })
-        if (!chica || !chica.activa) {
+        if (!chica || !chica.activa || chica.archivada) {
           throw Object.assign(new Error(`${label} no encontrada`), { statusCode: 400 })
         }
 
@@ -184,6 +177,7 @@ export async function POST(request: NextRequest) {
       const chicasDisponiblesCount = await tx.chica.count({
         where: {
           activa: true,
+          archivada: false,
           id: {
             notIn: Array.from(ocupadasPorOtroCliente),
           },
@@ -286,6 +280,23 @@ export async function POST(request: NextRequest) {
           usuario: { select: { nombre: true } },
         },
       })
+    })
+
+    audit({
+      user,
+      accion: 'CREAR',
+      tabla: 'Comanda',
+      registroId: comanda.id,
+      detalles: {
+        cliente: comanda.clienteNombre,
+        categoria: comanda.categoria.nombre,
+        precioFinal: comanda.precioFinal,
+        medioPago: comanda.medioPago,
+        ...(comanda.cortesia ? { cortesia: true } : {}),
+        ...(comanda.descuentoMonto || comanda.descuentoPorcentaje
+          ? { descuentoMonto: comanda.descuentoMonto, descuentoPorcentaje: comanda.descuentoPorcentaje }
+          : {}),
+      },
     })
 
     return NextResponse.json(comanda, { status: 201 })

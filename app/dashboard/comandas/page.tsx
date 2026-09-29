@@ -8,6 +8,7 @@ import StatusBadge from '../../../components/atoms/StatusBadge'
 import DataTable, { type DataTableColumn } from '../../../components/molecules/DataTable'
 import PageHeader from '../../../components/molecules/PageHeader'
 import { getAuthHeaders } from '../../../lib/client-auth'
+import { apiError, confirmar, notify } from '../../../lib/feedback'
 import { formatCurrency, formatDate } from '../../../lib/formatters'
 import { normalizeCommissionSlots } from '@/lib/commission-utils'
 
@@ -38,6 +39,9 @@ export default function Comandas() {
   const [updateError, setUpdateError] = useState('')
   const [filtroCliente, setFiltroCliente] = useState('')
   const [vistaAgrupada, setVistaAgrupada] = useState(false)
+  const [paginaServidor, setPaginaServidor] = useState(1)
+  const [hayMas, setHayMas] = useState(false)
+  const [cargandoMas, setCargandoMas] = useState(false)
 
   const getChicaEntries = (comanda: Comanda) => {
     const split = normalizeCommissionSlots({
@@ -109,19 +113,46 @@ export default function Comandas() {
     return Array.from(resumen.entries())
   }
 
+  const LOTE = 200
+
   const fetchComandas = () => {
-    fetch('/api/comandas', {
+    fetch(`/api/comandas?limit=${LOTE}&page=1`, {
       headers: getAuthHeaders(),
     })
-      .then((response) => response.json())
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await apiError(response, 'No se pudieron cargar las comandas'))
+        return response.json()
+      })
       .then((data) => {
-        setComandas(Array.isArray(data) ? data : [])
+        const lista = Array.isArray(data) ? data : []
+        setComandas(lista)
+        setHayMas(lista.length === LOTE)
         setLoading(false)
       })
       .catch((fetchError) => {
-        console.error('Error cargando comandas:', fetchError)
+        notify.error(fetchError instanceof Error ? fetchError.message : 'No se pudieron cargar las comandas')
         setLoading(false)
       })
+  }
+
+  const cargarMas = async () => {
+    try {
+      setCargandoMas(true)
+      const siguiente = paginaServidor + 1
+      const response = await fetch(`/api/comandas?limit=${LOTE}&page=${siguiente}`, { headers: getAuthHeaders() })
+      if (!response.ok) throw new Error(await apiError(response, 'No se pudieron cargar mas comandas'))
+      const data: Comanda[] = await response.json()
+      setComandas((prev) => {
+        const ids = new Set(prev.map((c) => c.id))
+        return [...prev, ...data.filter((c) => !ids.has(c.id))]
+      })
+      setPaginaServidor(siguiente)
+      setHayMas(data.length === LOTE)
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : 'No se pudieron cargar mas comandas')
+    } finally {
+      setCargandoMas(false)
+    }
   }
 
   useEffect(() => {
@@ -129,6 +160,15 @@ export default function Comandas() {
   }, [])
 
   const handleEstadoChange = async (comandaId: number, estado: 'pagada' | 'anulada') => {
+    if (estado === 'anulada') {
+      const ok = await confirmar({
+        title: 'Anular comanda',
+        message: `La comanda #${comandaId} dejara de contar en ventas, caja y comisiones. Quedara registrada en auditoria.`,
+        confirmLabel: 'Anular',
+      })
+      if (!ok) return
+    }
+
     try {
       setUpdatingId(comandaId)
       const response = await fetch(`/api/comandas/${comandaId}`, {
@@ -145,7 +185,9 @@ export default function Comandas() {
         throw new Error(data.error || 'No se pudo actualizar la comanda')
       }
 
-      fetchComandas()
+      const actualizada: Comanda = await response.json()
+      setComandas((prev) => prev.map((c) => (c.id === comandaId ? actualizada : c)))
+      notify.success(estado === 'anulada' ? `Comanda #${comandaId} anulada` : `Comanda #${comandaId} pagada`)
     } catch (updateError) {
       console.error('Error actualizando comanda:', updateError)
       setUpdateError(updateError instanceof Error ? updateError.message : 'No se pudo actualizar la comanda')
@@ -322,11 +364,20 @@ export default function Comandas() {
         <DataTable
           columns={columns}
           data={comandasFiltradas}
+          pageSize={25}
           getRowKey={(comanda) => comanda.id}
           emptyTitle="No hay comandas registradas"
           emptyDescription="Las comandas creadas apareceran en este tablero."
           renderExpanded={renderDetalleComanda}
         />
+      )}
+
+      {hayMas && (
+        <div className="mt-4 flex justify-center">
+          <Button variant="secondary" onClick={cargarMas} isLoading={cargandoMas}>
+            Cargar comandas mas antiguas
+          </Button>
+        </div>
       )}
     </div>
   )

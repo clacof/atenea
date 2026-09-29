@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
+import { can } from '@/lib/permissions'
+import { audit } from '@/lib/audit'
 
 /**
  * GET: Obtener configuracion de ciclo de reporte
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Verificar que sea admin
-  if (user.rol !== 'admin') {
+  if (!can(user.rol, 'config.editar')) {
     return NextResponse.json({ error: 'Solo admins pueden cambiar configuracion' }, { status: 403 })
   }
 
@@ -79,6 +81,8 @@ export async function POST(request: NextRequest) {
         descripcion: 'Minuto de inicio del ciclo de reporte (0-59)',
       },
     })
+
+    audit({ user, accion: 'EDITAR', tabla: 'ConfigGeneral', detalles: { cicloInicio: `${horaInicio}:${minutoInicio}` } })
 
     return NextResponse.json({
       success: true,

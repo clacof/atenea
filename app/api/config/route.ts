@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
+import { can } from '@/lib/permissions'
+import { audit } from '@/lib/audit'
 
 type ConfigValue = string | number | boolean
 
@@ -22,7 +24,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Solo admin puede acceder a configuracion
-  if (user.rol !== 'admin') {
+  if (!can(user.rol, 'config.editar')) {
     return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
 
@@ -67,7 +69,7 @@ export async function PUT(request: NextRequest) {
   }
 
   // Solo admin puede modificar configuracion
-  if (user.rol !== 'admin') {
+  if (!can(user.rol, 'config.editar')) {
     return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
   }
 
@@ -81,8 +83,14 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    const anteriores = await prisma.configGeneral.findMany({ where: { clave: { in: Object.keys(data) } } })
+    const valorAnterior = new Map(anteriores.map((c) => [c.clave, c.valor]))
+    const cambios: Record<string, [string | null, string]> = {}
+
     // Actualizar cada configuracion
     for (const [key, value] of Object.entries(data)) {
+      const antes = valorAnterior.get(key) ?? null
+      if (antes !== String(value)) cambios[key] = [antes, String(value)]
       await prisma.configGeneral.upsert({
         where: { clave: key },
         update: { valor: String(value) },
@@ -92,6 +100,10 @@ export async function PUT(request: NextRequest) {
           descripcion: `Configuracion: ${key}`,
         },
       })
+    }
+
+    if (Object.keys(cambios).length > 0) {
+      audit({ user, accion: 'EDITAR', tabla: 'ConfigGeneral', detalles: cambios })
     }
 
     // Retornar la configuracion actualizada

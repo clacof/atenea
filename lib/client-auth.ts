@@ -1,3 +1,5 @@
+import { resetCurrentUser } from './use-current-user'
+
 /**
  * Cookies (httpOnly) carry the auth token automatically for same-origin requests.
  * This function exists for API calls that may need extra headers in addition to cookies.
@@ -68,5 +70,6 @@ export function clearRememberedEmail(): void {
  */
 export async function logout(): Promise<void> {
   clearStoredAuth()
+  resetCurrentUser()
   await fetch('/api/auth/logout', { method: 'POST' }).catch(console.error)
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'atenea-v3';
+const CACHE_NAME = 'atenea-v4';
 const URLS_TO_CACHE = [
   '/',
   '/login',
@@ -36,13 +36,36 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Estrategia: Network First para API, Cache First para assets
+// Estrategia: Network First para paginas y API, Cache First para assets
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
     return;
   }
 
-  const { pathname } = new URL(event.request.url);
+  const url = new URL(event.request.url);
+  // Solo requests propias por http(s): ignora chrome-extension://, CDNs, etc.
+  if (!url.protocol.startsWith('http') || url.origin !== self.location.origin) {
+    return;
+  }
+  const { pathname } = url;
+
+  // Paginas HTML: Network First, para que un deploy nuevo se vea al recargar
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(event.request).then((cached) => cached || caches.match('/offline.html'))
+        )
+    );
+    return;
+  }
 
   // API requests: Network First
   if (pathname.startsWith('/api/')) {

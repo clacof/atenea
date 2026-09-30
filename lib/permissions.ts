@@ -8,6 +8,7 @@ const PERMISOS = {
   'categorias.editar': ['admin', 'supervisor'],
   'categorias.eliminar': ['admin'],
   'comandas.anular': ['admin', 'supervisor'],
+  'cocina.gestionar': ['admin', 'caja', 'supervisor'],
   'caja.gestionar': ['admin', 'caja'],
   'usuarios.gestionar': ['admin'],
   'config.editar': ['admin'],

@@ -7,12 +7,13 @@ import { confirmar } from '../../../lib/feedback'
 import { formatCurrency } from '../../../lib/formatters'
 import { cn } from '@/lib/utils'
 import { normalizeCommissionSlots } from '@/lib/commission-utils'
+import type { TipoCategoria } from '@/lib/tipoCategoria'
 
 interface ComandaHistorial {
   id: number
   hora: string
   categoria: string
-  categoriaTipo: 'trago' | 'botella'
+  categoriaTipo: TipoCategoria
   precioFinal: number
   chica1: string | null
   chica2: string | null
@@ -23,6 +24,9 @@ interface ComandaHistorial {
   comisionTotal: number
   comisionChica1: number
   comisionChica2: number
+  cantidad?: number
+  notas?: string | null
+  estadoCocina?: 'pendiente' | 'listo' | null
 }
 
 interface ClienteActivo {
@@ -425,7 +429,21 @@ export default function TurnoActivo() {
                                   >
                                     <div>
                                       <span className="mr-2 text-xs font-mono text-gray-500">{cmd.hora}</span>
-                                      <span className="font-semibold text-white">{cmd.categoria}</span>
+                                      <span className="font-semibold text-white">
+                                        {cmd.cantidad && cmd.cantidad > 1 ? `${cmd.cantidad}× ` : ''}{cmd.categoria}
+                                      </span>
+                                      {cmd.estadoCocina && (
+                                        <span
+                                          className={cn(
+                                            'ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                                            cmd.estadoCocina === 'listo'
+                                              ? 'bg-emerald-500/15 text-emerald-300'
+                                              : 'bg-orange-500/15 text-orange-300',
+                                          )}
+                                        >
+                                          {cmd.estadoCocina === 'listo' ? 'Listo' : 'En cocina'}
+                                        </span>
+                                      )}
                                         {cmd.chica1 && (
                                       <span className="text-purple-300 inline-flex items-center gap-2">
                                         · {cmd.chica1}
@@ -450,6 +468,9 @@ export default function TurnoActivo() {
                                         <span className="ml-2 text-xs uppercase tracking-wide text-amber-300">
                                           Cortesia
                                         </span>
+                                      )}
+                                      {cmd.notas && (
+                                        <span className="block text-xs italic text-gray-400">“{cmd.notas}”</span>
                                       )}
                                     </div>
                                     <div className="flex items-center gap-3">

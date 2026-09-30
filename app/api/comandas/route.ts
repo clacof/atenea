@@ -4,6 +4,7 @@ import { getUserFromRequest } from '@/lib/auth'
 import { calculateComision } from '@/lib/businessRules'
 import { audit } from '@/lib/audit'
 import { comandaCreateSchema, parseBody } from '@/lib/schemas'
+import { precioUnitario, reglaTipo } from '@/lib/tipoCategoria'
 
 function getTodayBounds() {
   const now = new Date()
@@ -64,6 +65,8 @@ export async function POST(request: NextRequest) {
       cortesia,
       medioPago,
       clienteNombre,
+      cantidad: cantidadInput,
+      notas,
     } = data
 
     const clienteNombreSanitized =
@@ -88,6 +91,18 @@ export async function POST(request: NextRequest) {
       const categoria = await tx.categoria.findUnique({ where: { id: categoriaId } })
       if (!categoria) {
         throw Object.assign(new Error('Categoria no encontrada'), { statusCode: 400 })
+      }
+
+      const regla = reglaTipo(categoria.tipo)
+      const cantidad = regla?.usaCantidad ? (cantidadInput ?? 1) : 1
+      const cantidadChicasSeleccionadas = (chica1Id ? 1 : 0) + (chica2Id ? 1 : 0)
+
+      // Tipos sin chicas para el cliente (comida): no se asignan acompanantes
+      if (regla?.chicasCliente.max === 0 && tipoConsumo === 'cliente' && cantidadChicasSeleccionadas > 0) {
+        throw Object.assign(new Error(`${regla.label} para cliente no lleva chicas asignadas`), { statusCode: 400 })
+      }
+      if (regla && tipoConsumo === 'chica' && !regla.generaComision && chica2Id) {
+        throw Object.assign(new Error(`${regla.label} para chica se registra a una sola chica`), { statusCode: 400 })
       }
 
       // Validar restriccion soloTransferencia (ej: Blue Label)
@@ -221,16 +236,14 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const precioBase =
-        tipoConsumo === 'cliente'
-          ? (categoria.precioCliente ?? categoria.precio)
-          : categoria.precioChica
-      if (!precioBase) {
+      const unitario = precioUnitario(categoria, tipoConsumo)
+      if (!unitario) {
         throw Object.assign(
           new Error('La categoria no tiene precio configurado para este tipo de consumo'),
           { statusCode: 400 },
         )
       }
+      const precioBase = unitario * cantidad
 
       const { precioFinal, comisionTotal, comisionChica1, comisionChica2 } = calculateComision({
         precioBase,
@@ -259,7 +272,10 @@ export async function POST(request: NextRequest) {
           tipoConsumo,
           chica1Id: chica1Id ?? null,
           chica2Id: chica2Id ?? null,
-          chicaRecibeComisionId: categoria.tipo === 'trago' ? null : (chicaRecibeComisionId ?? chica1Id ?? null),
+          chicaRecibeComisionId:
+            categoria.tipo === 'trago' || regla?.generaComision === false
+              ? null
+              : (chicaRecibeComisionId ?? chica1Id ?? null),
           precioBase,
           precioFinal,
           comisionTotal,
@@ -270,6 +286,9 @@ export async function POST(request: NextRequest) {
           cortesia: cortesia ?? false,
           medioPago,
           clienteNombre: clienteNombreSanitized,
+          cantidad,
+          notas: notas ?? null,
+          estadoCocina: regla?.usaCocina ? 'pendiente' : null,
           usuarioId: user.id,
           hora,
         },
@@ -290,6 +309,7 @@ export async function POST(request: NextRequest) {
       detalles: {
         cliente: comanda.clienteNombre,
         categoria: comanda.categoria.nombre,
+        ...(comanda.cantidad > 1 ? { cantidad: comanda.cantidad } : {}),
         precioFinal: comanda.precioFinal,
         medioPago: comanda.medioPago,
         ...(comanda.cortesia ? { cortesia: true } : {}),

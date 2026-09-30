@@ -15,11 +15,13 @@ import { confirmar } from '../../../lib/feedback'
 import { can } from '../../../lib/permissions'
 import { useCurrentUser } from '../../../lib/use-current-user'
 import { formatCurrency } from '../../../lib/formatters'
+import { REGLAS_TIPO, TIPOS_CATEGORIA, type TipoCategoria } from '../../../lib/tipoCategoria'
 
 interface Categoria {
   id: number
   nombre: string
-  tipo: 'trago' | 'botella'
+  tipo: TipoCategoria
+  seccion?: string | null
   isAfterhour: boolean
   precioCliente?: number
   precioChica?: number
@@ -32,11 +34,10 @@ interface Categoria {
   activa: boolean
 }
 
-type TipoCategoria = 'trago' | 'botella'
-
 interface FormData {
   nombre: string
   tipo: TipoCategoria
+  seccion: string
   isAfterhour: boolean
   precioCliente: number | ''
   precioChica: number | ''
@@ -51,6 +52,7 @@ interface FormData {
 interface CategoriaPayload {
   nombre: string
   tipo: TipoCategoria
+  seccion: string | null
   isAfterhour: boolean
   soloTransferencia: boolean
   comision: number
@@ -75,6 +77,7 @@ export default function Categorias() {
   const [formData, setFormData] = useState<FormData>({
     nombre: '',
     tipo: 'trago',
+    seccion: '',
     isAfterhour: false,
     precioCliente: '',
     precioChica: '',
@@ -126,6 +129,7 @@ export default function Categorias() {
       setFormData(prev => ({
         nombre: prev.nombre,
         tipo: value as TipoCategoria,
+        seccion: prev.seccion,
         isAfterhour: prev.isAfterhour,
         precioCliente: '',
         precioChica: '',
@@ -158,7 +162,7 @@ export default function Categorias() {
       errors.nombre = 'El nombre es requerido'
     }
 
-    if (formData.comision === '' || formData.comision < 0) {
+    if (REGLAS_TIPO[formData.tipo].generaComision && (formData.comision === '' || formData.comision < 0)) {
       errors.comision = 'Comisión debe ser mayor o igual a 0'
     }
 
@@ -170,6 +174,7 @@ export default function Categorias() {
     setFormData({
       nombre: '',
       tipo: 'trago',
+      seccion: '',
       isAfterhour: false,
       precioCliente: '',
       precioChica: '',
@@ -197,6 +202,7 @@ export default function Categorias() {
     setFormData({
       nombre: categoria.nombre,
       tipo: categoria.tipo,
+      seccion: categoria.seccion ?? '',
       isAfterhour: categoria.isAfterhour,
       precioCliente: categoria.precioCliente ?? '',
       precioChica: categoria.precioChica ?? '',
@@ -221,17 +227,21 @@ export default function Categorias() {
     try {
       setIsSubmitting(true)
       
+      const regla = REGLAS_TIPO[formData.tipo]
       const payload: CategoriaPayload = {
         nombre: formData.nombre,
         tipo: formData.tipo,
-        isAfterhour: formData.isAfterhour,
+        seccion: formData.seccion.trim() || null,
+        isAfterhour: regla.admiteRecargos ? formData.isAfterhour : false,
         soloTransferencia: formData.soloTransferencia,
-        comision: Number(formData.comision),
-        recargoCreditoCliente: formData.recargoCreditoCliente ? Number(formData.recargoCreditoCliente) : null,
-        recargoCreditoChica: formData.recargoCreditoChica ? Number(formData.recargoCreditoChica) : null,
+        comision: regla.generaComision ? Number(formData.comision) : 0,
+        recargoCreditoCliente:
+          regla.admiteRecargos && formData.recargoCreditoCliente ? Number(formData.recargoCreditoCliente) : null,
+        recargoCreditoChica:
+          regla.admiteRecargos && formData.recargoCreditoChica ? Number(formData.recargoCreditoChica) : null,
       }
 
-      if (formData.tipo === 'trago') {
+      if (regla.precioPorConsumo) {
         payload.precioCliente = Number(formData.precioCliente)
         payload.precioChica = Number(formData.precioChica)
         payload.comisionChica = Number(formData.comisionChica)
@@ -370,8 +380,6 @@ export default function Categorias() {
     </div>
   )
 
-  const tragos = categorias.filter(c => c.tipo === 'trago')
-  const botellas = categorias.filter(c => c.tipo === 'botella')
 
   const statusCell = (categoria: Categoria) => (
     <StatusBadge tone={categoria.activa ? 'success' : 'danger'}>
@@ -410,6 +418,27 @@ export default function Categorias() {
     { key: 'acciones', header: '', cell: accionesCell },
   ]
 
+  const comidaColumns: DataTableColumn<Categoria>[] = [
+    { key: 'id', header: 'ID', className: 'hidden sm:table-cell w-12', cell: (categoria) => categoria.id },
+    {
+      key: 'nombre',
+      header: 'Nombre',
+      cell: (categoria) => (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+          <span className="font-medium">{categoria.nombre}</span>
+          {!categoria.activa && (
+            <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs text-red-300 sm:hidden">Inactiva</span>
+          )}
+          <span className="text-xs text-gray-400 sm:hidden">{formatCurrency(categoria.precio ?? 0)}</span>
+        </div>
+      ),
+    },
+    { key: 'seccion', header: 'Seccion', className: 'hidden sm:table-cell', cell: (categoria) => categoria.seccion || '—' },
+    { key: 'precio', header: 'Precio', className: 'hidden sm:table-cell', cell: (categoria) => formatCurrency(categoria.precio ?? 0) },
+    { key: 'estado', header: 'Estado', className: 'hidden sm:table-cell', cell: statusCell },
+    { key: 'acciones', header: '', cell: accionesCell },
+  ]
+
   const botellasColumns: DataTableColumn<Categoria>[] = [
     { key: 'id', header: 'ID', className: 'hidden sm:table-cell w-12', cell: (categoria) => categoria.id },
     {
@@ -436,11 +465,30 @@ export default function Categorias() {
     { key: 'acciones', header: '', cell: accionesCell },
   ]
 
+  const columnasPorTipo: Record<TipoCategoria, DataTableColumn<Categoria>[]> = {
+    trago: tragosColumns,
+    botella: botellasColumns,
+    comida: comidaColumns,
+  }
+  const colorPorTipo: Record<TipoCategoria, string> = {
+    trago: 'text-purple-400',
+    botella: 'text-blue-400',
+    comida: 'text-orange-400',
+  }
+  const ordenarPorSeccion = (lista: Categoria[]) =>
+    [...lista].sort(
+      (a, b) => (a.seccion ?? '').localeCompare(b.seccion ?? '') || a.nombre.localeCompare(b.nombre),
+    )
+  const reglaForm = REGLAS_TIPO[formData.tipo]
+  const secciones = Array.from(
+    new Set(categorias.filter((c) => c.tipo === formData.tipo && c.seccion).map((c) => c.seccion as string)),
+  ).sort()
+
   return (
     <div>
         <PageHeader
           title="Categorias"
-          description="Agrupa tragos y botellas con precios y comisiones consistentes."
+          description="Tragos, botellas y carta de comida con precios y comisiones consistentes."
           actions={<Button onClick={openCreateModal}>+ Agregar Categoria</Button>}
         />
 
@@ -448,35 +496,28 @@ export default function Categorias() {
           <LoadingState />
         ) : (
           <div className="space-y-8">
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-base sm:text-xl font-semibold text-purple-400">🍹 Tragos o vasos</h2>
-                <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{tragos.length}</span>
-              </div>
-              <div className="overflow-x-auto rounded-xl">
-                <DataTable
-                  columns={tragosColumns}
-                  data={tragos}
-                  getRowKey={(categoria) => categoria.id}
-                  emptyTitle="No hay tragos registrados"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-base sm:text-xl font-semibold text-blue-400">🍾 Botellas</h2>
-                <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{botellas.length}</span>
-              </div>
-              <div className="overflow-x-auto rounded-xl">
-                <DataTable
-                  columns={botellasColumns}
-                  data={botellas}
-                  getRowKey={(categoria) => categoria.id}
-                  emptyTitle="No hay botellas registradas"
-                />
-              </div>
-            </div>
+            {TIPOS_CATEGORIA.map((tipo) => {
+              const regla = REGLAS_TIPO[tipo]
+              const delTipo = categorias.filter((c) => c.tipo === tipo)
+              return (
+                <div key={tipo}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h2 className={`text-base sm:text-xl font-semibold ${colorPorTipo[tipo]}`}>
+                      {regla.icono} {regla.plural}
+                    </h2>
+                    <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{delTipo.length}</span>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl">
+                    <DataTable
+                      columns={columnasPorTipo[tipo]}
+                      data={tipo === 'comida' ? ordenarPorSeccion(delTipo) : delTipo}
+                      getRowKey={(categoria) => categoria.id}
+                      emptyTitle={`Sin registros en ${regla.plural.toLowerCase()}`}
+                    />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -499,11 +540,11 @@ export default function Categorias() {
               <Select
                 name="tipo"
                 value={formData.tipo}
-                onChange={(value) => setFormData(prev => ({ ...prev, tipo: value as 'trago' | 'botella' }))}
-                options={[
-                  { value: 'trago', label: '🍹 Trago' },
-                  { value: 'botella', label: '🍾 Botella' },
-                ]}
+                onChange={(value) => setFormData(prev => ({ ...prev, tipo: value as TipoCategoria }))}
+                options={TIPOS_CATEGORIA.map((tipo) => ({
+                  value: tipo,
+                  label: `${REGLAS_TIPO[tipo].icono} ${REGLAS_TIPO[tipo].label}`,
+                }))}
               />
             </FormField>
 
@@ -513,21 +554,41 @@ export default function Categorias() {
                 name="nombre"
                 value={formData.nombre}
                 onChange={handleChange}
-                placeholder="Ej: Cerveza, Whisky, Champagne"
+                placeholder={formData.tipo === 'comida' ? 'Ej: Tabla de quesos, Papas fritas' : 'Ej: Cerveza, Whisky, Champagne'}
                 hasError={Boolean(fieldErrors.nombre)}
               />
             </FormField>
 
-            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-              <input
-                type="checkbox"
-                name="isAfterhour"
-                checked={formData.isAfterhour}
-                onChange={handleChange}
-                className="accent-purple-500"
-              />
-              Categoria afterhour (comision solo casa)
-            </label>
+            {formData.tipo === 'comida' && (
+              <FormField label="Seccion de la carta">
+                <Input
+                  type="text"
+                  name="seccion"
+                  value={formData.seccion}
+                  onChange={handleChange}
+                  placeholder="Ej: Tablas, Sandwich, Postres"
+                  list="secciones-carta"
+                />
+                <datalist id="secciones-carta">
+                  {secciones.map((seccion) => (
+                    <option key={seccion} value={seccion} />
+                  ))}
+                </datalist>
+              </FormField>
+            )}
+
+            {reglaForm.admiteRecargos && (
+              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="isAfterhour"
+                  checked={formData.isAfterhour}
+                  onChange={handleChange}
+                  className="accent-purple-500"
+                />
+                Categoria afterhour (comision solo casa)
+              </label>
+            )}
 
             <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
               <input
@@ -540,46 +601,50 @@ export default function Categorias() {
               Solo transferencia (ej: Blue Label)
             </label>
 
-            <FormField label="Comisión General" error={fieldErrors.comision}>
-              <Input
-                type="number"
-                name="comision"
-                value={formData.comision}
-                onChange={handleChange}
-                placeholder="0"
-                hasError={Boolean(fieldErrors.comision)}
-                min="0"
-              />
-            </FormField>
+            {reglaForm.generaComision && (
+              <FormField label="Comisión General" error={fieldErrors.comision}>
+                <Input
+                  type="number"
+                  name="comision"
+                  value={formData.comision}
+                  onChange={handleChange}
+                  placeholder="0"
+                  hasError={Boolean(fieldErrors.comision)}
+                  min="0"
+                />
+              </FormField>
+            )}
 
-            <div className="border border-gray-700 rounded-lg p-4 space-y-3">
-              <p className="text-sm font-medium text-orange-400">💳 Recargo por pago con credito</p>
-              <p className="text-xs text-gray-400">Monto adicional que se suma al precio cuando se paga con credito</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <FormField label="Recargo Credito Cliente ($)">
-                  <Input
-                    type="number"
-                    name="recargoCreditoCliente"
-                    value={formData.recargoCreditoCliente}
-                    onChange={handleChange}
-                    placeholder="0"
-                    min="0"
-                  />
-                </FormField>
-                <FormField label="Recargo Credito Chica ($)">
-                  <Input
-                    type="number"
-                    name="recargoCreditoChica"
-                    value={formData.recargoCreditoChica}
-                    onChange={handleChange}
-                    placeholder="0"
-                    min="0"
-                  />
-                </FormField>
+            {reglaForm.admiteRecargos && (
+              <div className="border border-gray-700 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-medium text-orange-400">💳 Recargo por pago con credito</p>
+                <p className="text-xs text-gray-400">Monto adicional que se suma al precio cuando se paga con credito</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FormField label="Recargo Credito Cliente ($)">
+                    <Input
+                      type="number"
+                      name="recargoCreditoCliente"
+                      value={formData.recargoCreditoCliente}
+                      onChange={handleChange}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </FormField>
+                  <FormField label="Recargo Credito Chica ($)">
+                    <Input
+                      type="number"
+                      name="recargoCreditoChica"
+                      value={formData.recargoCreditoChica}
+                      onChange={handleChange}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </FormField>
+                </div>
               </div>
-            </div>
+            )}
 
-            {formData.tipo === 'trago' && (
+            {reglaForm.precioPorConsumo && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <FormField label="Precio Cliente" error={fieldErrors.precioCliente}>
                   <Input
@@ -616,8 +681,8 @@ export default function Categorias() {
               </div>
             )}
 
-            {formData.tipo === 'botella' && (
-              <FormField label="Precio Botella" error={fieldErrors.precio}>
+            {!reglaForm.precioPorConsumo && (
+              <FormField label={`Precio ${reglaForm.label}`} error={fieldErrors.precio}>
                 <Input
                   type="number"
                   name="precio"

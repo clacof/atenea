@@ -16,6 +16,16 @@ Prioridad: **P1** = impacto directo en operación/dinero · **P2** = calidad y c
 - [ ] **P3** Foto opcional. Pendiente: requiere almacenamiento de archivos (ej. Vercel Blob); guardarla en la base haría pesada la vista de turno, que se refresca seguido.
 - [x] **P3** Acciones masivas: seleccionar varias y marcar ausentes/activas.
 
+## Carta de comida (2026-09-29)
+
+- [x] Tipo `comida` en categorías con sección de carta; reglas por tipo centralizadas en `lib/tipoCategoria.ts`.
+- [x] Comida: sin comisión (todo para la casa), chica paga el mismo precio, sin recargo por crédito ni afterhour.
+- [x] Comandas con cantidad, notas para cocina y estado de cocina (pendiente → listo).
+- [x] Vista `/dashboard/cocina` con refresco automático; estado visible en Turno Activo.
+- [ ] **P2** Rol `cocina` que solo vea la vista de cocina.
+- [ ] **P2** Reportes: ventas de comida separadas de bebidas.
+- [ ] **P3** Aviso sonoro en cocina al entrar pedido nuevo.
+
 ## Fase 2 — Control y auditoría
 
 - [x] **P1** `AuditLog` registra altas, ediciones (con valores antes → después), cambios de estado, archivado y eliminación de chicas.

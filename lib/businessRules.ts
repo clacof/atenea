@@ -3,10 +3,12 @@
  * Mantener aqui evita duplicar la logica entre el API y el formulario cliente.
  */
 
+import { reglaTipo, type TipoCategoria } from './tipoCategoria'
+
 export interface CommissionInput {
   precioBase: number
   tipoConsumo: 'cliente' | 'chica'
-  categoriaTipo?: 'trago' | 'botella' | null
+  categoriaTipo?: TipoCategoria | null
   isAfterhour?: boolean
   comisionChicaCategoria?: number | null
   comisionBotella?: number | null
@@ -37,6 +39,7 @@ export interface CommissionResult {
  * - Para TRAGO + cliente: TODA la comisión a UNA sola chica (chicaRecibeComisionId o chica1Id)
  * - Para BOTELLA + cliente: La comisión se divide entre TODAS las chicas
  * - Para tipoConsumo='chica': comisión sin dividir (consumo propio)
+ * - Tipos sin comision (comida): todo para la casa, sin recargo por credito ni afterhour
  * - Pago con credito agrega recargo configurable por categoria
  * 
  * Los montos intermedios se redondean para evitar centavos.
@@ -61,9 +64,13 @@ export function calculateComision(input: CommissionInput): CommissionResult {
     recargoCreditoChica,
   } = input
 
+  const regla = reglaTipo(categoriaTipo)
+  const generaComision = regla?.generaComision ?? true
+  const admiteRecargos = regla?.admiteRecargos ?? true
+
   // Calcular recargo por credito
   let recargoCredito = 0
-  if (medioPago === 'credito' && !cortesia) {
+  if (medioPago === 'credito' && !cortesia && admiteRecargos) {
     if (tipoConsumo === 'chica' && recargoCreditoChica) {
       recargoCredito = recargoCreditoChica
     } else if (recargoCreditoCliente) {
@@ -87,8 +94,8 @@ export function calculateComision(input: CommissionInput): CommissionResult {
   let comisionChica1 = 0
   let comisionChica2 = 0
 
-  if (isAfterhour) {
-    // Regla de negocio: afterhour no paga comision a chicas, es solo para la casa.
+  if (isAfterhour || !generaComision) {
+    // Regla de negocio: afterhour y tipos sin comision (comida) son solo para la casa.
     return { precioFinal, comisionTotal: 0, comisionChica1: 0, comisionChica2: 0, recargoCredito }
   }
 

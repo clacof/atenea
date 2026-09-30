@@ -1,5 +1,7 @@
 // Validaciones reutilizables para formularios
 
+import { reglaTipo } from './tipoCategoria'
+
 export interface ValidationError {
   field: string
   message: string
@@ -211,7 +213,7 @@ export class DomainValidator {
     validator
       .string(data.nombre, 'nombre', 1, 255)
 
-    if (data.tipo !== 'botella') {
+    if (reglaTipo(String(data.tipo ?? ''))?.precioPorConsumo ?? true) {
       validator
         .number(data.precioCliente, 'precioCliente', 0, 9999999)
         .number(data.precioChica, 'precioChica', 0, 9999999)

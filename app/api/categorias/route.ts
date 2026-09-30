@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       data: {
         nombre: data.nombre,
         tipo: data.tipo,
+        seccion: data.seccion ?? null,
         isAfterhour: Boolean(data.isAfterhour),
         precioCliente: data.precioCliente || null,
         precioChica: data.precioChica || null,

@@ -7,11 +7,13 @@ import FormError from '../../../../components/FormError'
 import { DomainValidator } from '../../../../lib/validations'
 import { getAuthHeaders } from '../../../../lib/client-auth'
 import { formatCurrency } from '../../../../lib/formatters'
+import { REGLAS_TIPO, TIPOS_CATEGORIA, precioUnitario, reglaTipo, type TipoCategoria } from '../../../../lib/tipoCategoria'
 
 interface Categoria {
   id: number
   nombre: string
-  tipo: 'trago' | 'botella'
+  tipo: TipoCategoria
+  seccion?: string | null
   isAfterhour: boolean
   precioCliente?: number | null
   precioChica?: number | null
@@ -72,6 +74,8 @@ function NuevaComandaContent() {
     descuentoMonto: '',
     cortesia: false,
     medioPago: 'efectivo',
+    cantidad: '1',
+    notas: '',
   })
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -118,13 +122,13 @@ function NuevaComandaContent() {
       return
     }
 
-    const baseCliente = categoria.precioCliente ?? categoria.precio ?? 0
-    const baseChica = categoria.precioChica ?? 0
-    const precioBase = formData.tipoConsumo === 'cliente' ? baseCliente : baseChica
+    const regla = reglaTipo(categoria.tipo)
+    const cantidad = regla?.usaCantidad ? Math.max(1, Number(formData.cantidad) || 1) : 1
+    const precioBase = (precioUnitario(categoria, formData.tipoConsumo) ?? 0) * cantidad
 
     // Calcular recargo por credito
     let recargoCredito = 0
-    if (formData.medioPago === 'credito' && !formData.cortesia) {
+    if (formData.medioPago === 'credito' && !formData.cortesia && regla?.admiteRecargos !== false) {
       if (formData.tipoConsumo === 'chica' && categoria.recargoCreditoChica) {
         recargoCredito = categoria.recargoCreditoChica
       } else if (categoria.recargoCreditoCliente) {
@@ -148,7 +152,7 @@ function NuevaComandaContent() {
 
     let comision = 0
     let deltaBotella = 0
-    const isAfterhour = categoria.isAfterhour
+    const isAfterhour = categoria.isAfterhour || regla?.generaComision === false
 
     // Calcular cantidad de chicas seleccionadas
     const cantidadChicas = (formData.chica1Id ? 1 : 0) + (formData.chica2Id ? 1 : 0)
@@ -263,12 +267,18 @@ function NuevaComandaContent() {
     try {
       setLoading(true)
 
+      const regla = reglaTipo(categoriaSeleccionada?.tipo)
+      // Comida para cliente no lleva chicas; comida para chica, solo una
+      const sinChicas = regla?.chicasCliente.max === 0 && formData.tipoConsumo === 'cliente'
+      const unaChica = regla?.generaComision === false && formData.tipoConsumo === 'chica'
       const payload = {
         categoriaId: Number(formData.categoriaId),
         tipoConsumo: formData.tipoConsumo,
         clienteNombre: clienteSeleccionado.trim().toUpperCase(),
-        chica1Id: formData.chica1Id ? Number(formData.chica1Id) : null,
-        chica2Id: formData.chica2Id ? Number(formData.chica2Id) : null,
+        chica1Id: !sinChicas && formData.chica1Id ? Number(formData.chica1Id) : null,
+        chica2Id: !sinChicas && !unaChica && formData.chica2Id ? Number(formData.chica2Id) : null,
+        ...(regla?.usaCantidad ? { cantidad: Math.max(1, Number(formData.cantidad) || 1) } : {}),
+        ...(regla?.usaCocina && formData.notas.trim() ? { notas: formData.notas.trim() } : {}),
         descuentoPorcentaje: formData.descuentoPorcentaje
           ? Number(formData.descuentoPorcentaje)
           : null,
@@ -315,6 +325,7 @@ function NuevaComandaContent() {
     disponibles.length,
     turnoData?.config.maxChicasBottella ?? disponibles.length,
   )
+  const reglaSeleccionada = reglaTipo(categorias.find((c) => c.id === Number(formData.categoriaId))?.tipo)
   const selectBaseClass =
     'w-full rounded border border-gray-600 bg-gray-700 py-2.5 pl-3 pr-10 leading-6 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-purple-500/40'
 
@@ -438,13 +449,59 @@ function NuevaComandaContent() {
               }`}
             >
               <option value="">Seleccionar categoria</option>
-              {categorias.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.nombre}
-                </option>
-              ))}
+              {TIPOS_CATEGORIA.map((tipo) => {
+                const delTipo = categorias
+                  .filter((cat) => cat.tipo === tipo)
+                  .sort((a, b) => (a.seccion ?? '').localeCompare(b.seccion ?? '') || a.nombre.localeCompare(b.nombre))
+                if (delTipo.length === 0) return null
+                return (
+                  <optgroup key={tipo} label={`${REGLAS_TIPO[tipo].icono} ${REGLAS_TIPO[tipo].plural}`}>
+                    {delTipo.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.seccion ? `${cat.seccion} · ` : ''}{cat.nombre}
+                      </option>
+                    ))}
+                  </optgroup>
+                )
+              })}
             </select>
             <FormError message={fieldErrors.categoriaId} />
+
+            {reglaSeleccionada?.usaCantidad && (
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-[120px_1fr] gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Cantidad</label>
+                  <input
+                    type="number"
+                    name="cantidad"
+                    value={formData.cantidad}
+                    onChange={handleChange}
+                    min="1"
+                    max="50"
+                    className="w-full p-2 bg-gray-700 text-white rounded"
+                  />
+                </div>
+                {reglaSeleccionada.usaCocina && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Notas para cocina</label>
+                    <input
+                      type="text"
+                      name="notas"
+                      value={formData.notas}
+                      onChange={handleChange}
+                      maxLength={300}
+                      placeholder="Ej: sin cebolla, bien cocido"
+                      className="w-full p-2 bg-gray-700 text-white rounded"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            {reglaSeleccionada?.generaComision === false && (
+              <p className="mt-3 text-xs text-gray-400">
+                {reglaSeleccionada.icono} Sin comision para chicas: todo para la casa.
+              </p>
+            )}
           </div>
 
           <div className="bg-gray-800 p-6 rounded-lg">
@@ -512,6 +569,7 @@ function NuevaComandaContent() {
                 <FormError message={fieldErrors.chica1Id} />
               </div>
 
+              {reglaSeleccionada?.generaComision !== false && (
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Chica 2 {formData.tipoConsumo === 'cliente' && categorias.find((c) => c.id === Number(formData.categoriaId))?.tipo === 'botella' && '(requerida para botella)'} *
@@ -532,6 +590,7 @@ function NuevaComandaContent() {
                     ))}
                 </select>
               </div>
+              )}
             </div>
           )}
 

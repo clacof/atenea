@@ -34,6 +34,12 @@ enum MedioPago {
 enum TipoCategoria {
   trago
   botella
+  comida
+}
+
+enum EstadoCocina {
+  pendiente
+  listo
 }
 
 enum EstadoComanda {
@@ -62,6 +68,7 @@ model Categoria {
   recargoCreditoCliente Int?           // Recargo por pago credito (cliente)
   recargoCreditoChica   Int?           // Recargo por pago credito (chica)
   soloTransferencia     Boolean        @default(false) // Solo permite pago por transferencia (ej: Blue Label)
+  seccion               String?        // Seccion de la carta (ej: Tablas, Sandwich) — usado por comida
   activa                Boolean        @default(true)
   comandas              Comanda[]
 }
@@ -117,6 +124,10 @@ model Comanda {
   medioPago           MedioPago
   estado              EstadoComanda   @default(activa)
   clienteNombre       String?
+  cantidad            Int             @default(1)
+  notas               String?         // Indicaciones para cocina (ej: sin cebolla)
+  estadoCocina        EstadoCocina?   // Solo comida: pendiente -> listo
+  cocinaListoAt       DateTime?
   usuarioId           Int
   usuario             Usuario         @relation(fields: [usuarioId], references: [id])
   createdAt           DateTime        @default(now())
@@ -130,6 +141,7 @@ model Comanda {
   @@index([chica2Id])
   @@index([clienteNombre])
   @@index([chicaRecibeComisionId])
+  @@index([estadoCocina])
 }
 
 model CajaTurno {

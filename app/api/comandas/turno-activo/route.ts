@@ -88,6 +88,9 @@ export async function GET(request: NextRequest) {
           comisionChica1: normalized.comisionChica1,
           comisionChica2: normalized.comisionChica2,
           cortesia: c.cortesia,
+          cantidad: c.cantidad,
+          notas: c.notas,
+          estadoCocina: c.estadoCocina,
         }
       }),
     }))

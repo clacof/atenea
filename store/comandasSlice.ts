@@ -1,9 +1,11 @@
 import { create } from 'zustand'
+import type { TipoCategoria } from '@/lib/tipoCategoria'
 
 export interface Categoria {
   id: number
   nombre: string
-  tipo: 'trago' | 'botella'
+  tipo: TipoCategoria
+  seccion?: string | null
   isAfterhour: boolean
   precioCliente?: number | null
   precioChica?: number | null

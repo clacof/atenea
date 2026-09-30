@@ -11,12 +11,16 @@ import { getAuthHeaders } from '../../../lib/client-auth'
 import { apiError, confirmar, notify } from '../../../lib/feedback'
 import { formatCurrency, formatDate } from '../../../lib/formatters'
 import { normalizeCommissionSlots } from '@/lib/commission-utils'
+import type { TipoCategoria } from '@/lib/tipoCategoria'
 
 interface Comanda {
   id: number
   fecha: string
   hora: string
-  categoria: { nombre: string; tipo: 'trago' | 'botella' }
+  categoria: { nombre: string; tipo: TipoCategoria }
+  cantidad?: number
+  notas?: string | null
+  estadoCocina?: 'pendiente' | 'listo' | null
   tipoConsumo: string
   clienteNombre: string | null
   chica1?: { nombre: string } | undefined
@@ -223,7 +227,19 @@ export default function Comandas() {
     { key: 'fecha', header: 'Fecha', cell: (comanda) => formatDate(comanda.fecha) },
     { key: 'hora', header: 'Hora', cell: (comanda) => comanda.hora },
     { key: 'cliente', header: 'Cliente', cell: (comanda) => comanda.clienteNombre ?? <span className="text-gray-500">—</span> },
-    { key: 'categoria', header: 'Categoria', cell: (comanda) => comanda.categoria.nombre },
+    {
+      key: 'categoria',
+      header: 'Categoria',
+      cell: (comanda) => (
+        <div>
+          <span>
+            {comanda.cantidad && comanda.cantidad > 1 ? `${comanda.cantidad}× ` : ''}
+            {comanda.categoria.nombre}
+          </span>
+          {comanda.notas && <span className="block text-xs italic text-gray-400">“{comanda.notas}”</span>}
+        </div>
+      ),
+    },
     { key: 'tipo', header: 'Tipo', cell: (comanda) => comanda.tipoConsumo },
     {
       key: 'chicas',

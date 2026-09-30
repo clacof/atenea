@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { NextResponse } from 'next/server'
+import { REGLAS_TIPO, TIPOS_CATEGORIA } from './tipoCategoria'
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -89,6 +90,12 @@ export const comandaCreateSchema = z.object({
   descuentoMonto: montoOpcional,
   cortesia: z.boolean().optional(),
   clienteNombre: z.string({ error: 'El cliente es requerido y debe tener formato C1, C2, C3...' }),
+  cantidad: z.coerce.number().int('Cantidad invalida').min(1, 'La cantidad minima es 1').max(50, 'Cantidad maxima 50').optional(),
+  notas: textoOpcional(300),
+})
+
+export const comandaCocinaSchema = z.object({
+  estadoCocina: z.enum(['pendiente', 'listo'], { error: 'Estado de cocina invalido' }),
 })
 
 export const comandaEstadoSchema = z.object({
@@ -101,7 +108,8 @@ const precio = z.coerce.number().int('Debe ser un entero').min(0, 'No puede ser 
 
 const categoriaBase = z.object({
   nombre: z.string({ error: 'Faltan datos requeridos' }).trim().min(1, 'Faltan datos requeridos').max(100),
-  tipo: z.enum(['trago', 'botella'], { error: 'Faltan datos requeridos' }),
+  tipo: z.enum(TIPOS_CATEGORIA, { error: 'Faltan datos requeridos' }),
+  seccion: textoOpcional(50),
   isAfterhour: z.boolean().optional(),
   soloTransferencia: z.boolean().optional(),
   activa: z.boolean().optional(),
@@ -121,8 +129,8 @@ export const categoriaCreateSchema = categoriaBase.superRefine((data, ctx) => {
   if (data.tipo === 'trago' && (!data.precioCliente || !data.precioChica || data.comisionChica == null)) {
     ctx.addIssue({ code: 'custom', message: 'Para tragos se requieren precioCliente, precioChica y comisionChica' })
   }
-  if (data.tipo === 'botella' && !data.precio) {
-    ctx.addIssue({ code: 'custom', message: 'Para botellas se requiere precio' })
+  if (!REGLAS_TIPO[data.tipo].precioPorConsumo && !data.precio) {
+    ctx.addIssue({ code: 'custom', message: `Para ${REGLAS_TIPO[data.tipo].label.toLowerCase()} se requiere precio` })
   }
 })
 
